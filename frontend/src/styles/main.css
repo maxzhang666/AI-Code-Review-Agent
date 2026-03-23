@@ -1,0 +1,88 @@
+@import "tailwindcss";
+@import "tailwindcss-primeui";
+@config "../../tailwind.config.js";
+@plugin "tailwindcss-primeui";
+
+@layer base {
+  html,
+  :host {
+    line-height: 1;
+  }
+
+  body {
+    @apply bg-surface-50 text-surface-900 dark:bg-surface-950 dark:text-surface-100 antialiased;
+    font-feature-settings: 'liga', 'kern';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 122, 255, 0.2);
+  color: inherit;
+}
+
+/* Focus Visible */
+:focus-visible {
+  outline: 2px solid rgba(0, 122, 255, 0.5);
+  outline-offset: 2px;
+}
+
+.dashboard-compact-tooltip [data-pc-section='text'] {
+  padding: 0.35rem 0.55rem;
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.dashboard-activity-tooltip {
+  max-width: min(22rem, calc(100vw - 1.5rem));
+}
+
+.dashboard-activity-tooltip [data-pc-section='text'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Smooth transitions */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    scroll-behavior: smooth;
+  }
+}
+
+@keyframes tab-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,0 +1,507 @@
+import request from '@/utils/request'
+import { API_ENDPOINTS, getApiUrl } from '@/config/api'
+
+// 统计数据
+export const getStatistics = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.STATISTICS),
+    method: 'get'
+  })
+}
+
+export const getDashboardStats = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.DASHBOARD_STATS),
+    method: 'get'
+  })
+}
+
+export const getDashboardCharts = (days: number = 7) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.DASHBOARD_CHARTS),
+    method: 'get',
+    params: { days }
+  })
+}
+
+// 审查记录列表
+export const getReviews = (params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.REVIEWS),
+    method: 'get',
+    params
+  })
+}
+
+// 审查详情
+export const getReviewDetail = (id: string) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.REVIEW_DETAIL(id)),
+    method: 'get'
+  })
+}
+
+// 配置信息
+export const getConfig = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.CONFIG),
+    method: 'get'
+  })
+}
+
+// 更新配置
+export const updateConfig = (data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.CONFIG),
+    method: 'post',
+    data
+  })
+}
+
+// 获取配置摘要
+export const getConfigSummary = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.CONFIG_SUMMARY),
+    method: 'get'
+  })
+}
+
+// 批量更新配置
+export const batchUpdateConfig = (data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.CONFIG_BATCH_UPDATE),
+    method: 'post',
+    data
+  })
+}
+
+// 账号管理 - 获取用户列表（管理员）
+export const getAuthUsers = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.AUTH_USERS),
+    method: 'get'
+  })
+}
+
+// 账号管理 - 创建用户（管理员）
+export const createAuthUser = (data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.AUTH_USERS),
+    method: 'post',
+    data
+  })
+}
+
+// 账号管理 - 更新用户启用状态（管理员）
+export const updateAuthUserStatus = (id: string | number, isActive: boolean) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.AUTH_USER_STATUS(id)),
+    method: 'patch',
+    data: { is_active: isActive }
+  })
+}
+
+// 账号管理 - 重置用户密码（管理员）
+export const resetAuthUserPassword = (id: string | number, newPassword: string) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.AUTH_USER_PASSWORD(id)),
+    method: 'patch',
+    data: { new_password: newPassword }
+  })
+}
+
+// 账号管理 - 当前用户修改密码
+export const changeMyPassword = (oldPassword: string, newPassword: string) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.AUTH_CHANGE_PASSWORD),
+    method: 'post',
+    data: { old_password: oldPassword, new_password: newPassword }
+  })
+}
+
+// 通知通道列表
+export const getNotificationChannels = (params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNELS),
+    method: 'get',
+    params
+  })
+}
+
+// 创建通知通道
+export const createNotificationChannel = (data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNELS),
+    method: 'post',
+    data
+  })
+}
+
+// 更新通知通道
+export const updateNotificationChannel = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNEL_DETAIL(id)),
+    method: 'patch',
+    data
+  })
+}
+
+// 删除通知通道
+export const deleteNotificationChannel = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNEL_DETAIL(id)),
+    method: 'delete'
+  })
+}
+
+// 测试通知渠道
+export const testNotificationChannel = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.NOTIFICATION_CHANNEL_DETAIL(id) + 'test/'),
+    method: 'post'
+  })
+}
+
+// 日志列表
+export const getLogs = (params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LOGS),
+    method: 'get',
+    params
+  })
+}
+
+// 系统信息
+export const getSystemInfo = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_INFO),
+    method: 'get'
+  })
+}
+
+// Webhook 测试
+export const testWebhook = (data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.WEBHOOK_TEST),
+    method: 'post',
+    data
+  })
+}
+
+// 项目管理 - 获取项目列表
+export const getProjects = (params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECTS),
+    method: 'get',
+    params
+  })
+}
+
+// 项目管理 - 获取项目详情
+export const getProjectDetail = (id: string) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_DETAIL(id)),
+    method: 'get'
+  })
+}
+
+// 项目管理 - 启用项目审查
+export const enableProjectReview = (id: string) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_ENABLE(id)),
+    method: 'post'
+  })
+}
+
+// 项目管理 - 禁用项目审查
+export const disableProjectReview = (id: string) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_DISABLE(id)),
+    method: 'post'
+  })
+}
+
+// 项目管理 - 更新项目设置
+export const updateProject = (id: string, data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_UPDATE(id)),
+    method: 'post',
+    data
+  })
+}
+
+// 项目管理 - 获取项目webhook日志
+export const getProjectWebhookLogs = (id: string, params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_WEBHOOK_LOGS(id)),
+    method: 'get',
+    params
+  })
+}
+
+// 项目管理 - 获取项目审查历史
+export const getProjectReviewHistory = (id: string, params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_REVIEW_HISTORY(id)),
+    method: 'get',
+    params
+  })
+}
+
+export const getProjectStatsDetail = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_STATS_DETAIL(id)),
+    method: 'get'
+  })
+}
+
+// 项目通知 - 获取
+export const getProjectNotifications = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_NOTIFICATIONS(id)),
+    method: 'get'
+  })
+}
+
+// 项目通知 - 更新
+export const updateProjectNotifications = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_NOTIFICATIONS_UPDATE(id)),
+    method: 'post',
+    data
+  })
+}
+
+// 项目 Webhook 事件 - 获取
+export const getProjectWebhookEvents = (id: string | number) => {
+  return request({
+    url: getApiUrl(`/webhook/projects/${id}/webhook-events/`),
+    method: 'get'
+  })
+}
+
+// 项目 Webhook 事件 - 更新
+export const updateProjectWebhookEvents = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(`/webhook/projects/${id}/webhook-events/update/`),
+    method: 'post',
+    data
+  })
+}
+
+// 项目 Webhook 事件 Prompt - 获取
+export const getProjectWebhookEventPrompts = (id: string | number) => {
+  return request({
+    url: getApiUrl(`/webhook/projects/${id}/webhook-event-prompts/`),
+    method: 'get'
+  })
+}
+
+// 项目 Webhook 事件 Prompt - 更新
+export const updateProjectWebhookEventPrompt = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(`/webhook/projects/${id}/webhook-event-prompts/update/`),
+    method: 'post',
+    data
+  })
+}
+
+// 项目管理 - 获取所有项目的统计数据
+export const getAllProjectStats = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECT_STATS),
+    method: 'get'
+  })
+}
+
+// Webhook事件规则 - 获取列表
+export const getWebhookEventRules = (params?: any) => {
+  return request({
+    url: getApiUrl('/webhook-event-rules/'),
+    method: 'get',
+    params
+  })
+}
+
+// Webhook事件规则 - 获取详情
+export const getWebhookEventRule = (id: string | number) => {
+  return request({
+    url: getApiUrl(`/webhook-event-rules/${id}/`),
+    method: 'get'
+  })
+}
+
+// Webhook事件规则 - 创建
+export const createWebhookEventRule = (data: any) => {
+  return request({
+    url: getApiUrl('/webhook-event-rules/'),
+    method: 'post',
+    data
+  })
+}
+
+// Webhook事件规则 - 更新
+export const updateWebhookEventRule = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(`/webhook-event-rules/${id}/`),
+    method: 'patch',
+    data
+  })
+}
+
+// Webhook事件规则 - 删除
+export const deleteWebhookEventRule = (id: string | number) => {
+  return request({
+    url: getApiUrl(`/webhook-event-rules/${id}/`),
+    method: 'delete'
+  })
+}
+
+// Webhook事件规则 - 测试规则
+export const testWebhookEventRule = (id: string | number, payload: any) => {
+  return request({
+    url: getApiUrl(`/webhook-event-rules/${id}/test_rule/`),
+    method: 'post',
+    data: { payload }
+  })
+}
+
+// Webhook事件规则 - 验证payload
+export const validateWebhookPayload = (payload: any) => {
+  return request({
+    url: getApiUrl('/webhook-event-rules/validate_payload/'),
+    method: 'post',
+    data: { payload }
+  })
+}
+
+// Webhook事件规则 - 初始化默认规则
+export const initializeDefaultWebhookEventRules = () => {
+  return request({
+    url: getApiUrl('/webhook-event-rules/initialize_defaults/'),
+    method: 'post'
+  })
+}
+
+// 获取 Webhook URL
+export const getWebhookUrl = () => {
+  return request({
+    url: getApiUrl('/webhook/webhook-url/'),
+    method: 'get'
+  })
+}
+
+// 测试 Claude CLI 配置
+export const testClaudeCliConfigApi = (data: any) => {
+  return request({
+    url: getApiUrl('/configs/test-claude-cli/'),
+    method: 'post',
+    data,
+    timeout: 90000
+  })
+}
+
+// LLM Provider CRUD
+export const getLLMProviders = (params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LLM_PROVIDERS),
+    method: 'get',
+    params
+  })
+}
+
+export const createLLMProvider = (data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LLM_PROVIDERS),
+    method: 'post',
+    data
+  })
+}
+
+export const getLLMProvider = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LLM_PROVIDER_DETAIL(id)),
+    method: 'get'
+  })
+}
+
+export const updateLLMProvider = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LLM_PROVIDER_DETAIL(id)),
+    method: 'put',
+    data
+  })
+}
+
+export const patchLLMProvider = (id: string | number, data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LLM_PROVIDER_DETAIL(id)),
+    method: 'patch',
+    data
+  })
+}
+
+export const deleteLLMProvider = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LLM_PROVIDER_DETAIL(id)),
+    method: 'delete'
+  })
+}
+
+export const activateLLMProvider = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LLM_PROVIDER_ACTIVATE(id)),
+    method: 'post'
+  })
+}
+
+export const fetchLLMModels = (data: { api_base: string; api_key?: string }) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LLM_PROVIDER_FETCH_MODELS),
+    method: 'post',
+    data,
+    timeout: 20000
+  })
+}
+
+export const testLLMProviderConnection = (data: { protocol: string; config_data: Record<string, any> }) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.LLM_PROVIDER_TEST_CONNECTION),
+    method: 'post',
+    data,
+    timeout: 45000
+  })
+}
+
+// GitLab Project Import
+export const searchGitLabProjects = (params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.GITLAB_PROJECT_SEARCH),
+    method: 'get',
+    params
+  })
+}
+
+export const importGitLabProjects = (data: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.PROJECTS_IMPORT),
+    method: 'post',
+    data
+  })
+}
+
+// System Configs
+export const getSystemConfigs = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_CONFIGS),
+    method: 'get'
+  })
+}
+
+export const updateSystemConfigs = (data: { configs: Record<string, string> }) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_CONFIGS),
+    method: 'put',
+    data
+  })
+}
