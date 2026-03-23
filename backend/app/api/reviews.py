@@ -4,15 +4,32 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, case
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db
-from app.models import MergeRequestReview, WebhookLog
-from app.schemas.review import MergeRequestReviewResponse
+from app.models import MergeRequestReview, ReviewFinding, ReviewFindingAction, WebhookLog
+from app.schemas.review import (
+    MergeRequestReviewResponse,
+    ReviewFindingActionCreate,
+    ReviewFindingActionResponse,
+    ReviewFindingResponse,
+    ReviewFindingStatsResponse,
+    ReviewStatsBucket,
+)
 from app.schemas.webhook import WebhookLogResponse
+from app.services.review_structured import materialize_review_findings_from_legacy
 
 router = APIRouter()
+
+
+def _to_bucket_rows(rows: list[tuple[Any, Any]]) -> list[ReviewStatsBucket]:
+    result: list[ReviewStatsBucket] = []
+    for name, value in rows:
+        label = str(name or "unknown")
+        count = int(value or 0)
+        result.append(ReviewStatsBucket(name=label, value=count))
+    return result
 
 
 @router.get("/dashboard/stats/")
@@ -250,6 +267,131 @@ async def get_review(
     if review is None:
         raise HTTPException(status_code=404, detail="Review not found.")
     return MergeRequestReviewResponse.model_validate(review, from_attributes=True)
+
+
+@router.get("/reviews/{review_id}/findings/")
+async def list_review_findings(
+    review_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    review = await db.get(MergeRequestReview, review_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail="Review not found.")
+
+    findings = await materialize_review_findings_from_legacy(db, review=review)
+    return {
+        "count": len(findings),
+        "results": [ReviewFindingResponse.model_validate(item, from_attributes=True) for item in findings],
+    }
+
+
+@router.post("/review-findings/{finding_id}/actions/", response_model=ReviewFindingActionResponse)
+async def create_review_finding_action(
+    finding_id: int,
+    payload: ReviewFindingActionCreate,
+    db: AsyncSession = Depends(get_db),
+) -> ReviewFindingActionResponse:
+    finding = await db.get(ReviewFinding, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=404, detail="Review finding not found.")
+
+    action = ReviewFindingAction(
+        finding_id=finding_id,
+        action_type=payload.action_type,
+        actor=payload.actor,
+        note=payload.note,
+    )
+    db.add(action)
+    await db.commit()
+    await db.refresh(action)
+    return ReviewFindingActionResponse.model_validate(action, from_attributes=True)
+
+
+@router.get("/review-findings/stats/", response_model=ReviewFindingStatsResponse)
+async def get_review_findings_stats(
+    days: int = Query(default=30, ge=1, le=365),
+    project_id: int | None = Query(default=None),
+    owner: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> ReviewFindingStatsResponse:
+    start_time = datetime.now() - timedelta(days=days)
+    owner_display_expr = func.coalesce(
+        ReviewFinding.owner_name,
+        ReviewFinding.owner_email,
+        ReviewFinding.owner,
+        "unknown",
+    )
+
+    filters = [ReviewFinding.created_at >= start_time]
+    if project_id is not None:
+        filters.append(MergeRequestReview.project_id == project_id)
+    if owner:
+        filters.append(
+            or_(
+                ReviewFinding.owner_name == owner,
+                ReviewFinding.owner_email == owner,
+                ReviewFinding.owner == owner,
+            )
+        )
+
+    total_findings = (
+        await db.execute(
+            select(func.count())
+            .select_from(ReviewFinding)
+            .join(MergeRequestReview, MergeRequestReview.id == ReviewFinding.review_id)
+            .where(*filters)
+        )
+    ).scalar() or 0
+
+    by_category_rows = (
+        await db.execute(
+            select(ReviewFinding.category, func.count().label("cnt"))
+            .select_from(ReviewFinding)
+            .join(MergeRequestReview, MergeRequestReview.id == ReviewFinding.review_id)
+            .where(*filters)
+            .group_by(ReviewFinding.category)
+            .order_by(func.count().desc())
+        )
+    ).all()
+    by_severity_rows = (
+        await db.execute(
+            select(ReviewFinding.severity, func.count().label("cnt"))
+            .select_from(ReviewFinding)
+            .join(MergeRequestReview, MergeRequestReview.id == ReviewFinding.review_id)
+            .where(*filters)
+            .group_by(ReviewFinding.severity)
+            .order_by(func.count().desc())
+        )
+    ).all()
+    by_owner_rows = (
+        await db.execute(
+            select(owner_display_expr.label("owner_display"), func.count().label("cnt"))
+            .select_from(ReviewFinding)
+            .join(MergeRequestReview, MergeRequestReview.id == ReviewFinding.review_id)
+            .where(*filters)
+            .group_by(owner_display_expr)
+            .order_by(func.count().desc())
+        )
+    ).all()
+    trend_rows = (
+        await db.execute(
+            select(func.date(ReviewFinding.created_at).label("day"), func.count().label("cnt"))
+            .select_from(ReviewFinding)
+            .join(MergeRequestReview, MergeRequestReview.id == ReviewFinding.review_id)
+            .where(*filters)
+            .group_by(func.date(ReviewFinding.created_at))
+            .order_by(func.date(ReviewFinding.created_at))
+        )
+    ).all()
+
+    daily_trend = [{"date": str(row.day), "value": int(row.cnt or 0)} for row in trend_rows]
+    return ReviewFindingStatsResponse(
+        total_findings=int(total_findings),
+        by_category=_to_bucket_rows(by_category_rows),
+        by_severity=_to_bucket_rows(by_severity_rows),
+        by_owner=_to_bucket_rows(by_owner_rows),
+        daily_trend=daily_trend,
+    )
 
 
 @router.get("/logs/")

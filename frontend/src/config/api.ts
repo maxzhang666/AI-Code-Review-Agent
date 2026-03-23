@@ -34,6 +34,9 @@ export const API_ENDPOINTS = {
   // 审查记录
   REVIEWS: '/webhook/reviews/',
   REVIEW_DETAIL: (id: string) => `/webhook/reviews/${id}/`,
+  REVIEW_FINDINGS: (id: string | number) => `/webhook/reviews/${id}/findings/`,
+  REVIEW_FINDING_ACTIONS: (id: string | number) => `/webhook/review-findings/${id}/actions/`,
+  REVIEW_FINDINGS_STATS: '/webhook/review-findings/stats/',
 
   // 配置管理
   CONFIG: '/config/',

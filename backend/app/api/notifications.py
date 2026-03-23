@@ -80,7 +80,7 @@ async def list_notification_channels(
         await db.execute(
             select(NotificationChannel)
             .where(NotificationChannel.notification_type != "gitlab")
-            .order_by(NotificationChannel.updated_at.desc())
+            .order_by(NotificationChannel.created_at.desc(), NotificationChannel.id.desc())
             .offset(offset)
             .limit(page_size)
         )

@@ -27,6 +27,7 @@ from app.services.notification import NotificationDispatcher
 from app.services.report import ReportGenerator
 from app.services.repository import RepositoryManager
 from app.services.review import ReviewResultParser, ReviewService
+from app.services.review_structured import normalize_issues, replace_review_findings
 
 TaskHandler = Callable[[dict[str, Any]], Awaitable[Any] | Any]
 _TASK_REGISTRY: dict[str, TaskHandler] = {}
@@ -646,6 +647,12 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 removed_file_count=filter_summary.get("removed_file_count") if filter_summary else None,
             )
 
+            review_issues = normalize_issues(
+                review_issues,
+                default_owner_name=(author_name or None),
+                default_owner_email=(author_email or None),
+            )
+
             mr_info = {
                 "project_id": project.project_id,
                 "project_name": project.project_name,
@@ -769,6 +776,11 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 review.is_mock = provider.protocol == "mock"
                 review.notification_sent = bool(notification_result.get("success"))
                 review.notification_result = notification_result
+                await replace_review_findings(
+                    db,
+                    review=review,
+                    issues=review_issues,
+                )
 
             if webhook_log is not None:
                 webhook_log.pipeline_trace = tracer.to_dict()

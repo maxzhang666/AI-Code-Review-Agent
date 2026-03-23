@@ -33,7 +33,7 @@
           <a
             :href="href"
             v-tooltip.right="{ value: item.label, disabled: !collapsed, class: 'dashboard-compact-tooltip' }"
-            class="group flex items-center w-full rounded-xl edium transition-all duration-200 sidebar-menu-item"
+            class="group flex items-center w-full rounded-xl font-medium transition-all duration-200 sidebar-menu-item"
             :class="[
               collapsed ? 'justify-center py-3 px-2' : 'gap-3 px-4 py-3',
               isActive(item.route)
@@ -81,6 +81,7 @@ import {
   Settings,
   ScrollText,
   FolderKanban,
+  BarChart3,
 } from 'lucide-vue-next'
 import reviewLogo from '@/assets/icons/review-logo.webp'
 import Card from 'primevue/card'
@@ -102,6 +103,7 @@ const navItems: SidebarMenuItem[] = [
   { route: '/dashboard', label: '仪表盘', iconComponent: LayoutDashboard },
   { route: '/projects', label: '项目管理', iconComponent: FolderKanban },
   { route: '/reviews', label: '审查记录', iconComponent: FileText },
+  { route: '/review-insights', label: '问题分析', iconComponent: BarChart3 },
   { route: '/config', label: '配置管理', iconComponent: Settings },
   { route: '/logs', label: '日志监控', iconComponent: ScrollText },
 ]
@@ -123,6 +125,11 @@ const handleNavigate = (
   border-radius: 0;
   box-shadow: none;
   background: transparent;
+}
+
+.logo-card,
+.status-card {
+  flex-shrink: 0;
 }
 
 .review-logo-avatar {

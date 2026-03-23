@@ -225,8 +225,8 @@ class GitLabService:
                 "page": page,
                 "per_page": per_page,
                 "membership": True,
-                "order_by": "name",
-                "sort": "asc",
+                "order_by": "created_at",
+                "sort": "desc",
             }
             if search:
                 kwargs["search"] = search

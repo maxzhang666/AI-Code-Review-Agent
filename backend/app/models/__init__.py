@@ -10,7 +10,7 @@ from app.models.project import (
     ProjectWebhookEventPrompt,
 )
 from app.models.queue import TaskRecord
-from app.models.review import MergeRequestReview
+from app.models.review import MergeRequestReview, ReviewFinding, ReviewFindingAction
 from app.models.system_config import SystemConfig
 from app.models.webhook import WebhookLog
 
@@ -19,6 +19,8 @@ __all__ = [
     "GitLabConfig",
     "LLMProvider",
     "MergeRequestReview",
+    "ReviewFinding",
+    "ReviewFindingAction",
     "NotificationChannel",
     "Project",
     "ProjectNotificationSetting",

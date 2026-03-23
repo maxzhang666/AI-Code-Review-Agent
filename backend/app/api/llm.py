@@ -370,7 +370,7 @@ async def list_gitlab_configs(
     configs = (
         await db.execute(
             select(GitLabConfig)
-            .order_by(GitLabConfig.updated_at.desc())
+            .order_by(GitLabConfig.created_at.desc(), GitLabConfig.id.desc())
             .offset(offset)
             .limit(page_size)
         )

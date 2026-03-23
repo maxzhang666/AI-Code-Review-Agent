@@ -84,3 +84,55 @@ async def test_create_project_hook_creates_when_url_not_exists(
             "enable_ssl_verification": True,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_list_projects_uses_created_at_desc_sorting(
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_kwargs: dict = {}
+
+    class _FakeProjectResult(list):
+        total = 7
+
+    class _FakeProjectsForList:
+        def list(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            return _FakeProjectResult(
+                [
+                    SimpleNamespace(
+                        id=101,
+                        name="repo-a",
+                        path_with_namespace="group/repo-a",
+                        web_url="https://gitlab.example.com/group/repo-a",
+                        namespace={"full_path": "group"},
+                        description="A",
+                        last_activity_at="2026-03-01T00:00:00Z",
+                    )
+                ]
+            )
+
+    class _FakeListClient:
+        projects = _FakeProjectsForList()
+
+    svc = GitLabService(db_session)
+
+    async def _fake_ensure_client():
+        return _FakeListClient()
+
+    monkeypatch.setattr(svc, "_ensure_client", _fake_ensure_client)
+
+    items, total = await svc.list_projects(search="repo", page=2, per_page=10)
+
+    assert total == 7
+    assert len(items) == 1
+    assert items[0]["id"] == 101
+    assert captured_kwargs == {
+        "page": 2,
+        "per_page": 10,
+        "membership": True,
+        "order_by": "created_at",
+        "sort": "desc",
+        "search": "repo",
+    }

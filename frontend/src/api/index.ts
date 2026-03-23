@@ -41,6 +41,36 @@ export const getReviewDetail = (id: string) => {
   })
 }
 
+export const getReviewFindings = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.REVIEW_FINDINGS(id)),
+    method: 'get'
+  })
+}
+
+export const createReviewFindingAction = (
+  id: string | number,
+  data: { action_type: 'fixed' | 'ignored' | 'todo' | 'reopened'; actor: string; note?: string }
+) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.REVIEW_FINDING_ACTIONS(id)),
+    method: 'post',
+    data
+  })
+}
+
+export const getReviewFindingsStats = (params?: {
+  days?: number
+  project_id?: number
+  owner?: string
+}) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.REVIEW_FINDINGS_STATS),
+    method: 'get',
+    params
+  })
+}
+
 // 配置信息
 export const getConfig = () => {
   return request({

@@ -59,15 +59,50 @@ class ReviewResultParser:
         if not isinstance(item, dict):
             return None
         severity = str(item.get("severity") or "medium").lower()
-        if severity not in ("high", "medium", "low"):
+        if severity not in ("critical", "high", "medium", "low"):
             severity = "medium"
+        line = item.get("line")
+        line_start = item.get("line_start")
+        line_end = item.get("line_end")
+        if not isinstance(line_start, int):
+            line_start = line if isinstance(line, int) else None
+        if not isinstance(line_end, int):
+            line_end = line_start
+        confidence_raw = item.get("confidence")
+        confidence = confidence_raw if isinstance(confidence_raw, (int, float)) else None
+        if confidence is not None:
+            confidence = float(max(0.0, min(1.0, confidence)))
+        owner_name_raw = item.get("owner_name")
+        owner_email_raw = item.get("owner_email")
+        owner_raw = item.get("owner")
+        owner_name = str(owner_name_raw).strip() if owner_name_raw is not None else ""
+        owner_email = str(owner_email_raw).strip() if owner_email_raw is not None else ""
+        owner = str(owner_raw).strip() if owner_raw is not None else ""
+        if not owner_name and not owner_email and owner:
+            if "@" in owner:
+                owner_email = owner
+            else:
+                owner_name = owner
+        file_path = str(item.get("file_path") or item.get("file") or "")
+        message = str(item.get("message") or item.get("description") or "")
         return {
             "severity": severity,
             "category": str(item.get("category") or "质量"),
-            "file": str(item.get("file") or ""),
-            "line": item.get("line") if isinstance(item.get("line"), int) else None,
-            "description": str(item.get("description") or ""),
+            "subcategory": str(item.get("subcategory") or ""),
+            "file": file_path,
+            "file_path": file_path,
+            "line": line_start,
+            "line_start": line_start,
+            "line_end": line_end,
+            "description": message,
+            "message": message,
             "suggestion": str(item.get("suggestion") or ""),
+            "owner_name": owner_name or None,
+            "owner_email": owner_email or None,
+            "owner": owner_name or owner_email or None,
+            "confidence": confidence,
+            "is_blocking": bool(item.get("is_blocking", False)),
+            "is_false_positive": bool(item.get("is_false_positive", False)),
         }
 
     @classmethod

@@ -159,9 +159,23 @@
             <template #content>
               <div v-if="issuesList.length > 0" class="mb-4 flex flex-wrap items-center gap-3">
                 <Tag severity="info">{{ allFilePaths.length }} 个文件</Tag>
+                <Tag v-if="criticalCount > 0" severity="danger">阻断 {{ criticalCount }}</Tag>
                 <Tag v-if="highCount > 0" severity="danger">严重 {{ highCount }}</Tag>
                 <Tag v-if="mediumCount > 0" severity="warn">中等 {{ mediumCount }}</Tag>
                 <Tag v-if="lowCount > 0" severity="success">轻微 {{ lowCount }}</Tag>
+              </div>
+
+              <div
+                v-if="structuredFindings.length > 0"
+                class="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-surface-200/70 bg-surface-50 p-3 dark:border-surface-700/70 dark:bg-surface-900"
+              >
+                <span class="text-xs text-surface-500">处理记录人</span>
+                <InputText
+                  v-model.trim="actionActor"
+                  class="h-8 w-[180px]"
+                  placeholder="例如: maxzhang"
+                />
+                <span class="text-xs text-surface-500">点击问题下方按钮写入处理动作</span>
               </div>
 
               <template v-if="issuesList.length > 0 || allFilePaths.length > 0">
@@ -188,6 +202,54 @@
                         <p class="mb-1 text-surface-800">{{ issue.description }}</p>
                         <div v-if="issue.suggestion" class="mt-2">
                           <pre class="overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-800 p-3 text-slate-200"><code>{{ issue.suggestion }}</code></pre>
+                        </div>
+                        <div
+                          v-if="issue.id != null"
+                          class="mt-3 space-y-2 rounded-lg border border-surface-200/70 bg-surface-50 p-3 dark:border-surface-700/70 dark:bg-surface-900"
+                        >
+                          <InputText
+                            :model-value="getActionNote(issue.id)"
+                            class="h-8 w-full"
+                            placeholder="处理备注（可选）"
+                            @update:model-value="setActionNote(issue.id, String($event || ''))"
+                          />
+                          <div class="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="small"
+                              severity="success"
+                              outlined
+                              :loading="isActionLoading(issue.id)"
+                              label="已修复"
+                              @click="submitFindingAction(issue.id, 'fixed')"
+                            />
+                            <Button
+                              size="small"
+                              severity="warn"
+                              outlined
+                              :loading="isActionLoading(issue.id)"
+                              label="待处理"
+                              @click="submitFindingAction(issue.id, 'todo')"
+                            />
+                            <Button
+                              size="small"
+                              severity="secondary"
+                              outlined
+                              :loading="isActionLoading(issue.id)"
+                              label="忽略"
+                              @click="submitFindingAction(issue.id, 'ignored')"
+                            />
+                            <Button
+                              size="small"
+                              severity="danger"
+                              outlined
+                              :loading="isActionLoading(issue.id)"
+                              label="重新打开"
+                              @click="submitFindingAction(issue.id, 'reopened')"
+                            />
+                            <span v-if="lastActionMessage(issue.id)" class="text-xs text-surface-500">
+                              {{ lastActionMessage(issue.id) }}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -219,9 +281,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, ExternalLink, Loader2 } from 'lucide-vue-next'
 import { marked } from 'marked'
-import { getProjectDetail, getReviewDetail } from '@/api/index'
+import { createReviewFindingAction, getProjectDetail, getReviewDetail, getReviewFindings } from '@/api/index'
 import { formatBackendDateTime } from '@/utils/datetime'
 import { getReviewStatusMeta } from '@/utils/reviewStatus'
+import { toast } from '@/utils/toast'
+import { useAuthStore } from '@/stores/auth'
 import IconButton from '@/components/ui/IconButton.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -231,21 +295,53 @@ import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
+import InputText from 'primevue/inputtext'
 
 interface ReviewIssue {
+  id: number | null
   severity: string
   category: string
+  subcategory?: string
   file: string
   line: number | null
+  line_end?: number | null
   description: string
   suggestion: string
+  owner?: string | null
 }
+
+interface StructuredFinding {
+  id: number
+  review_id: number
+  fingerprint: string
+  category: string
+  subcategory: string
+  severity: string
+  confidence: number | null
+  file_path: string
+  line_start: number | null
+  line_end: number | null
+  message: string
+  suggestion: string
+  owner: string | null
+  is_blocking: boolean
+  is_false_positive: boolean
+}
+
+type FindingActionType = 'fixed' | 'ignored' | 'todo' | 'reopened'
 
 const router = useRouter()
 const route = useRoute()
+const auth = useAuthStore()
+auth.hydrate()
 const activeTab = ref('basic')
 const loading = ref(false)
 const mrUrl = ref('')
+const structuredFindings = ref<StructuredFinding[]>([])
+const actionActor = ref(auth.username || '')
+const actionNotes = ref<Record<number, string>>({})
+const actionLoadingMap = ref<Record<number, boolean>>({})
+const actionMessageMap = ref<Record<number, string>>({})
 
 const tabs = [
   { key: 'basic', label: '基本信息' },
@@ -278,9 +374,34 @@ const review = ref<Record<string, any>>({
 })
 
 const issuesList = computed<ReviewIssue[]>(() => {
+  if (structuredFindings.value.length > 0) {
+    return structuredFindings.value.map((item) => ({
+      id: item.id,
+      severity: item.severity,
+      category: item.category,
+      subcategory: item.subcategory,
+      file: item.file_path,
+      line: item.line_start,
+      line_end: item.line_end,
+      description: item.message,
+      suggestion: item.suggestion,
+      owner: item.owner,
+    }))
+  }
   const raw = review.value.review_issues
   if (!Array.isArray(raw)) return []
-  return raw as ReviewIssue[]
+  return raw.map((item: any) => ({
+    id: null,
+    severity: String(item?.severity || 'medium'),
+    category: String(item?.category || '质量'),
+    subcategory: String(item?.subcategory || ''),
+    file: String(item?.file || item?.file_path || ''),
+    line: typeof item?.line === 'number' ? item.line : (typeof item?.line_start === 'number' ? item.line_start : null),
+    line_end: typeof item?.line_end === 'number' ? item.line_end : null,
+    description: String(item?.description || item?.message || ''),
+    suggestion: String(item?.suggestion || ''),
+    owner: item?.owner ? String(item.owner) : null,
+  }))
 })
 
 const hasStructuredData = computed(() => issuesList.value.length > 0 || parsedSummary.value || parsedHighlights.value.length > 0)
@@ -312,6 +433,7 @@ const scoreColorClass = computed(() => {
   return 'text-red-600 dark:text-red-300'
 })
 
+const criticalCount = computed(() => issuesList.value.filter(i => i.severity === 'critical').length)
 const highCount = computed(() => issuesList.value.filter(i => i.severity === 'high').length)
 const mediumCount = computed(() => issuesList.value.filter(i => i.severity === 'medium').length)
 const lowCount = computed(() => issuesList.value.filter(i => i.severity === 'low').length)
@@ -339,7 +461,7 @@ const issuesByFile = computed(() => {
   return map
 })
 
-const severityRank = (s: string) => (s === 'high' ? 3 : s === 'medium' ? 2 : 1)
+const severityRank = (s: string) => (s === 'critical' ? 4 : s === 'high' ? 3 : s === 'medium' ? 2 : 1)
 
 const filesWithIssues = computed<FileIssueGroup[]>(() => {
   const groups: FileIssueGroup[] = []
@@ -388,6 +510,7 @@ const fetchReview = async () => {
     const response = await getReviewDetail(id)
     if (response) {
       review.value = response
+      await fetchReviewFindings(id)
       if (response.merge_request_url) {
         mrUrl.value = String(response.merge_request_url)
       } else if (response.project_id && response.merge_request_iid != null) {
@@ -407,6 +530,71 @@ const fetchReview = async () => {
     console.error('获取审查详情失败:', error)
   } finally {
     loading.value = false
+  }
+}
+
+const fetchReviewFindings = async (id: string) => {
+  try {
+    const response = await getReviewFindings(id)
+    structuredFindings.value = Array.isArray(response?.results) ? response.results : []
+  } catch (error) {
+    console.error('获取结构化问题失败:', error)
+    structuredFindings.value = []
+  }
+}
+
+const getActionNote = (findingId: number | null): string => {
+  if (findingId == null) return ''
+  return actionNotes.value[findingId] || ''
+}
+
+const setActionNote = (findingId: number | null, value: string) => {
+  if (findingId == null) return
+  actionNotes.value[findingId] = value
+}
+
+const isActionLoading = (findingId: number | null): boolean => {
+  if (findingId == null) return false
+  return Boolean(actionLoadingMap.value[findingId])
+}
+
+const lastActionMessage = (findingId: number | null): string => {
+  if (findingId == null) return ''
+  return actionMessageMap.value[findingId] || ''
+}
+
+const actionTypeLabel = (actionType: FindingActionType): string => {
+  if (actionType === 'fixed') return '已修复'
+  if (actionType === 'todo') return '待处理'
+  if (actionType === 'ignored') return '已忽略'
+  if (actionType === 'reopened') return '重新打开'
+  return actionType
+}
+
+const submitFindingAction = async (findingId: number | null, actionType: FindingActionType) => {
+  if (findingId == null) return
+  const actor = actionActor.value.trim()
+  if (!actor) {
+    toast.warning('请先填写处理记录人')
+    return
+  }
+
+  actionLoadingMap.value[findingId] = true
+  try {
+    const payload = {
+      action_type: actionType,
+      actor,
+      note: getActionNote(findingId),
+    }
+    const resp = await createReviewFindingAction(findingId, payload)
+    actionMessageMap.value[findingId] = `${actionTypeLabel(actionType)} · ${resp?.actor || actor}`
+    actionNotes.value[findingId] = ''
+    toast.success('处理动作已记录')
+  } catch (error) {
+    console.error('记录处理动作失败:', error)
+    toast.error('记录处理动作失败')
+  } finally {
+    actionLoadingMap.value[findingId] = false
   }
 }
 
@@ -437,6 +625,7 @@ const statusSeverity = (status: string): 'success' | 'info' | 'danger' | 'warn' 
 
 const severityTag = (severity: string): 'success' | 'warn' | 'danger' | 'secondary' => {
   const map: Record<string, 'success' | 'warn' | 'danger' | 'secondary'> = {
+    critical: 'danger',
     high: 'danger',
     medium: 'warn',
     low: 'success',
@@ -445,12 +634,13 @@ const severityTag = (severity: string): 'success' | 'warn' | 'danger' | 'seconda
 }
 
 const severityLabel = (severity: string): string => {
-  const map: Record<string, string> = { high: '严重', medium: '中等', low: '轻微' }
+  const map: Record<string, string> = { critical: '阻断', high: '严重', medium: '中等', low: '轻微' }
   return map[severity] || severity
 }
 
 const issueBorderClass = (severity: string): string => {
   const map: Record<string, string> = {
+    critical: 'border-red-600 dark:border-red-400',
     high: 'border-red-400 dark:border-red-500/70',
     medium: 'border-orange-400 dark:border-orange-500/70',
     low: 'border-green-400 dark:border-green-500/70'

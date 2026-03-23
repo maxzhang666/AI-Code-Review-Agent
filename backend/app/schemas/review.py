@@ -38,3 +38,57 @@ class MergeRequestReviewResponse(BaseModel):
     review_summary: str = ""
     review_highlights: list[str] = Field(default_factory=list)
     request_id: str | None = None
+
+
+class ReviewFindingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    review_id: int
+    fingerprint: str
+    category: str
+    subcategory: str = ""
+    severity: str
+    confidence: float | None = None
+    file_path: str = ""
+    line_start: int | None = None
+    line_end: int | None = None
+    message: str = ""
+    suggestion: str = ""
+    owner_name: str | None = None
+    owner_email: str | None = None
+    owner: str | None = None
+    is_blocking: bool = False
+    is_false_positive: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ReviewFindingActionCreate(BaseModel):
+    action_type: str = Field(pattern="^(fixed|ignored|todo|reopened)$")
+    actor: str = Field(min_length=1, max_length=255)
+    note: str = ""
+
+
+class ReviewFindingActionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    finding_id: int
+    action_type: str
+    actor: str
+    note: str = ""
+    action_at: datetime | None = None
+
+
+class ReviewStatsBucket(BaseModel):
+    name: str
+    value: int
+
+
+class ReviewFindingStatsResponse(BaseModel):
+    total_findings: int
+    by_category: list[ReviewStatsBucket] = Field(default_factory=list)
+    by_severity: list[ReviewStatsBucket] = Field(default_factory=list)
+    by_owner: list[ReviewStatsBucket] = Field(default_factory=list)
+    daily_trend: list[dict[str, Any]] = Field(default_factory=list)

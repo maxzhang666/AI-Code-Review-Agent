@@ -35,7 +35,7 @@ async def list_webhook_event_rules(
     rules = (
         await db.execute(
             select(WebhookEventRule)
-            .order_by(WebhookEventRule.updated_at.desc())
+            .order_by(WebhookEventRule.created_at.desc(), WebhookEventRule.id.desc())
             .offset(offset)
             .limit(page_size)
         )

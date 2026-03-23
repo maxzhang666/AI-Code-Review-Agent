@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '审查记录', icon: 'FileText' }
       },
       {
+        path: 'review-insights',
+        name: 'ReviewInsights',
+        component: () => import('@/views/ReviewInsights.vue'),
+        meta: { title: '问题分析', icon: 'BarChart3' }
+      },
+      {
         path: 'reviews/:id',
         name: 'ReviewDetail',
         component: () => import('@/views/ReviewDetail.vue'),
