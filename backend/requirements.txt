@@ -1,0 +1,16 @@
+fastapi>=0.115.0
+uvicorn[standard]
+sqlalchemy[asyncio]>=2.0.0
+aiosqlite
+asyncpg
+alembic
+pydantic>=2.0
+pydantic-settings
+httpx
+python-gitlab
+tenacity
+python-multipart
+redis[hiredis]
+aiosmtplib
+psutil
+email-validator
