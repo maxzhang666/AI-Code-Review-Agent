@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from sqlalchemy import select
@@ -84,7 +84,7 @@ class DatabaseQueue(TaskQueue):
                 if record is None:
                     return None
                 record.status = TaskStatus.processing.value
-                record.started_at = datetime.now()
+                record.started_at = datetime.now(UTC).replace(tzinfo=None)
                 return record.id, self._to_payload(record)
 
     async def ack(self, task_id: str) -> None:

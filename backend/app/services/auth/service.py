@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,7 +56,6 @@ async def ensure_bootstrap_admin(db: AsyncSession, settings: Settings) -> AuthUs
 
 
 async def update_last_login(db: AsyncSession, user: AuthUser) -> None:
-    user.last_login_at = datetime.now()
+    user.last_login_at = datetime.now(UTC).replace(tzinfo=None)
     await db.commit()
     await db.refresh(user)
-

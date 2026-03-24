@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse, urlunparse
 
@@ -295,7 +295,7 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 if webhook_log is not None:
                     webhook_log.pipeline_trace = tracer.to_dict()
                     webhook_log.processed = True
-                    webhook_log.processed_at = datetime.now()
+                    webhook_log.processed_at = datetime.now(UTC).replace(tzinfo=None)
                     webhook_log.log_level = "WARNING"
                     webhook_log.skip_reason = "No matching active webhook event rule."
                     webhook_log.error_message = None
@@ -324,7 +324,7 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 if webhook_log is not None:
                     webhook_log.pipeline_trace = tracer.to_dict()
                     webhook_log.processed = True
-                    webhook_log.processed_at = datetime.now()
+                    webhook_log.processed_at = datetime.now(UTC).replace(tzinfo=None)
                     webhook_log.log_level = "WARNING"
                     webhook_log.skip_reason = "Project review is disabled."
                     webhook_log.error_message = None
@@ -817,7 +817,7 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 review.files_reviewed = files_reviewed
                 review.total_files = total_files
                 review.status = "completed"
-                review.completed_at = datetime.now()
+                review.completed_at = datetime.now(UTC).replace(tzinfo=None)
                 review.error_message = None
                 review.response_sent = bool(notification_result.get("success"))
                 review.response_type = "notification"
@@ -835,7 +835,7 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
             if webhook_log is not None:
                 webhook_log.pipeline_trace = tracer.to_dict()
                 webhook_log.processed = True
-                webhook_log.processed_at = datetime.now()
+                webhook_log.processed_at = datetime.now(UTC).replace(tzinfo=None)
                 webhook_log.log_level = "INFO"
                 webhook_log.skip_reason = None
                 webhook_log.error_message = None
@@ -867,7 +867,7 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 if review is not None:
                     review.status = "failed"
                     review.error_message = str(exc)
-                    review.completed_at = datetime.now()
+                    review.completed_at = datetime.now(UTC).replace(tzinfo=None)
             if tracked_webhook_log_id is not None:
                 webhook_log = await db.get(WebhookLog, tracked_webhook_log_id)
                 if webhook_log is not None:
