@@ -26,6 +26,7 @@ def test_gitlab_comment_message_renders_structured_issue_list() -> None:
                 "line": 42,
                 "description": "可能出现空指针异常",
                 "suggestion": "增加非空判断\n并补充单测",
+                "code_snippet": "if (foo == null) {\n    return bar.toString();\n}",
             }
         ],
     }
@@ -39,8 +40,10 @@ def test_gitlab_comment_message_renders_structured_issue_list() -> None:
     assert "1. 🔴 高危 **[reliability]** `src/main/java/Foo.java:42`" in message
     assert "问题: 可能出现空指针异常" in message
     assert "建议: 增加非空判断<br>并补充单测" in message
-    assert "<details>" in message
-    assert "查看完整审查报告" in message
+    assert "代码段:" in message
+    assert "if (foo == null) {" in message
+    assert "<details>" not in message
+    assert "查看完整审查报告" not in message
 
 
 def test_gitlab_comment_message_handles_missing_issue_fields() -> None:
@@ -58,3 +61,28 @@ def test_gitlab_comment_message_handles_missing_issue_fields() -> None:
     assert "问题列表（1）" in message
     assert "`unknown`" in message
     assert "问题: 描述" in message
+
+
+def test_gitlab_comment_message_uses_problematic_code_alias_for_snippet() -> None:
+    dispatcher = NotificationDispatcher(request_id="req-test")
+
+    message = dispatcher._gitlab_comment_message(
+        report_data={"content": ""},
+        mr_info={
+            "project_name": "demo-project",
+            "title": "fix: alias snippet",
+            "issues": [
+                {
+                    "severity": "medium",
+                    "category": "Bug",
+                    "file": "app/main.py",
+                    "line": 7,
+                    "description": "key 访问未判空",
+                    "problematic_code": "return payload['data']['id']",
+                }
+            ],
+        },
+    )
+
+    assert "代码段:" in message
+    assert "return payload['data']['id']" in message

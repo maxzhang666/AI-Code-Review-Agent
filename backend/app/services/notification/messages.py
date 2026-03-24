@@ -56,6 +56,13 @@ def normalize_multiline(text: str) -> str:
     return normalized.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>")
 
 
+def issue_code_snippet(issue: dict[str, Any]) -> str:
+    raw = str(issue.get("code_snippet") or issue.get("problematic_code") or "").strip()
+    if not raw:
+        return ""
+    return raw.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def build_gitlab_comment_message(
     report_data: dict[str, Any],
     mr_info: dict[str, Any],
@@ -117,18 +124,14 @@ def build_gitlab_comment_message(
                 lines.append(f"   - 问题: {description}")
             if suggestion:
                 lines.append(f"   - 建议: {suggestion}")
+            snippet = issue_code_snippet(issue)
+            if snippet:
+                lines.append("   - 代码段:")
+                lines.append("     ```")
+                for snippet_line in snippet.split("\n"):
+                    lines.append(f"     {snippet_line}")
+                lines.append("     ```")
             lines.append("")
-
-    content = str(report_data.get("content") or "").strip()
-    if content:
-        lines.extend([
-            "<details>",
-            "<summary>查看完整审查报告</summary>",
-            "",
-            content,
-            "",
-            "</details>",
-        ])
 
     return truncate_text("\n".join(lines).strip(), 30000)
 
