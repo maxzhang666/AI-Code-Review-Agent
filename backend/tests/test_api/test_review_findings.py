@@ -66,7 +66,7 @@ async def test_list_review_findings_materializes_legacy_issues(client, db_sessio
     assert first["severity"] in {"critical", "high", "medium", "low"}
     assert first["fingerprint"]
     assert any(
-        item.get("code_snippet") == "value = payload.get('data')\nreturn value['id']"
+        item.get("code_snippet") == "value = payload.get('data')"
         for item in payload["results"]
     )
 

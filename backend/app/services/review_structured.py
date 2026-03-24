@@ -52,6 +52,16 @@ def _normalize_snippet_source(source: Any) -> str:
     return "line"
 
 
+def _to_single_line_code(value: Any) -> str:
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    if not text.strip():
+        return ""
+    for line in text.split("\n"):
+        if line.strip():
+            return line
+    return ""
+
+
 def _build_diff_line_maps(diff_text: str) -> tuple[dict[int, str], dict[int, str]]:
     new_line_map: dict[int, str] = {}
     old_line_map: dict[int, str] = {}
@@ -90,19 +100,10 @@ def _build_diff_line_maps(diff_text: str) -> tuple[dict[int, str], dict[int, str
     return new_line_map, old_line_map
 
 
-def _render_snippet_from_line_map(
-    line_map: dict[int, str],
-    *,
-    line_start: int,
-    line_end: int,
-    context_lines: int,
-) -> str:
+def _render_code_line_from_map(line_map: dict[int, str], *, line_no: int) -> str:
     if not line_map:
         return ""
-    start = max(1, line_start - max(0, context_lines))
-    end = max(start, line_end + max(0, context_lines))
-    rows = [line_map[line_no] for line_no in range(start, end + 1) if line_no in line_map]
-    return "\n".join(rows).strip()
+    return str(line_map.get(line_no) or "")
 
 
 def _build_change_index(changes: Any) -> dict[str, dict[str, Any]]:
@@ -123,7 +124,6 @@ def _extract_snippet_by_line(
     *,
     issue: dict[str, Any],
     change: dict[str, Any],
-    context_lines: int,
     parsed_diff_cache: dict[int, tuple[dict[int, str], dict[int, str]]],
 ) -> str:
     line_start = _to_int(issue.get("line_start"))
@@ -132,12 +132,6 @@ def _extract_snippet_by_line(
     if line_start is None:
         return ""
 
-    line_end = _to_int(issue.get("line_end"))
-    if line_end is None:
-        line_end = line_start
-    if line_end < line_start:
-        line_start, line_end = line_end, line_start
-
     cache_key = id(change)
     line_maps = parsed_diff_cache.get(cache_key)
     if line_maps is None:
@@ -145,19 +139,11 @@ def _extract_snippet_by_line(
         parsed_diff_cache[cache_key] = line_maps
     new_line_map, old_line_map = line_maps
 
-    snippet = _render_snippet_from_line_map(
-        new_line_map,
-        line_start=line_start,
-        line_end=line_end,
-        context_lines=context_lines,
-    )
+    snippet = _render_code_line_from_map(new_line_map, line_no=line_start)
     if snippet:
-        return snippet
-    return _render_snippet_from_line_map(
-        old_line_map,
-        line_start=line_start,
-        line_end=line_end,
-        context_lines=context_lines,
+        return _to_single_line_code(snippet)
+    return _to_single_line_code(
+        _render_code_line_from_map(old_line_map, line_no=line_start)
     )
 
 
@@ -166,7 +152,6 @@ def enrich_issues_with_code_snippets(
     *,
     changes: Any,
     source_mode: str = "line",
-    context_lines: int = 2,
 ) -> list[dict[str, Any]]:
     if not isinstance(issues, list):
         return []
@@ -181,14 +166,13 @@ def enrich_issues_with_code_snippets(
             continue
 
         issue = dict(raw_issue)
-        llm_snippet = str(
+        llm_snippet = _to_single_line_code(
             issue.get("code_snippet")
             or issue.get("problematic_code")
             or issue.get("problem_code")
             or issue.get("code")
             or issue.get("snippet")
-            or ""
-        ).strip()
+        )
 
         file_path = str(issue.get("file_path") or issue.get("file") or "").strip()
         matched_change = change_index.get(file_path)
@@ -197,7 +181,6 @@ def enrich_issues_with_code_snippets(
             line_snippet = _extract_snippet_by_line(
                 issue=issue,
                 change=matched_change,
-                context_lines=context_lines,
                 parsed_diff_cache=parsed_diff_cache,
             )
 
@@ -206,8 +189,9 @@ def enrich_issues_with_code_snippets(
         else:
             final_snippet = line_snippet or llm_snippet
 
-        issue["code_snippet"] = final_snippet
-        issue["problematic_code"] = final_snippet
+        normalized_snippet = _to_single_line_code(final_snippet)
+        issue["code_snippet"] = normalized_snippet
+        issue["problematic_code"] = normalized_snippet
         enriched.append(issue)
 
     return enriched
@@ -258,14 +242,13 @@ def normalize_issue(
 
     message = str(issue.get("message") or issue.get("description") or "").strip()
     suggestion = str(issue.get("suggestion") or "").strip()
-    code_snippet = str(
+    code_snippet = _to_single_line_code(
         issue.get("code_snippet")
         or issue.get("problematic_code")
         or issue.get("problem_code")
         or issue.get("code")
         or issue.get("snippet")
-        or ""
-    ).strip()
+    )
 
     owner_name_raw = issue.get("owner_name")
     owner_email_raw = issue.get("owner_email")

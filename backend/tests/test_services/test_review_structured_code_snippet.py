@@ -28,8 +28,7 @@ def test_enrich_issues_uses_line_based_snippet_by_default() -> None:
     enriched = enrich_issues_with_code_snippets(issues, changes=changes, source_mode="line")
 
     assert len(enriched) == 1
-    assert "meta = payload.get('meta')" in enriched[0]["code_snippet"]
-    assert "return meta['id']" in enriched[0]["code_snippet"]
+    assert enriched[0]["code_snippet"] == "    return meta['id']"
 
 
 def test_enrich_issues_line_mode_falls_back_to_llm_snippet() -> None:
@@ -39,7 +38,7 @@ def test_enrich_issues_line_mode_falls_back_to_llm_snippet() -> None:
             "file": "src/core.py",
             "line": 99,
             "description": "no matching line in diff",
-            "code_snippet": "fallback from llm",
+            "code_snippet": "fallback from llm\nsecond line should be dropped",
         }
     ]
 
@@ -67,7 +66,7 @@ def test_enrich_issues_llm_mode_prefers_llm_snippet() -> None:
             "file": "src/core.py",
             "line": 3,
             "description": "possible key error",
-            "code_snippet": "LLM provided snippet",
+            "code_snippet": "LLM provided snippet\nextra context line",
         }
     ]
 

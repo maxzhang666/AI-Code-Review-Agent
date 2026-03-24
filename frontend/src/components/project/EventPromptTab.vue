@@ -5,11 +5,12 @@
         <ConfigSectionHeader title="审查提示词配置" dot-class="bg-indigo-500" />
 
         <div class="rounded-xl border border-indigo-200/60 bg-gradient-to-r from-indigo-50 to-purple-50 p-4 text-indigo-700 dark:border-indigo-500/35 dark:from-indigo-500/12 dark:to-purple-500/12 dark:text-indigo-200">
-          <div class="mb-2 font-medium">为每个 Webhook 事件类型自定义代码审查的提示词</div>
+          <div class="mb-2 font-medium">为每个 Webhook 事件类型配置额外审查要求</div>
           <div class="space-y-1 text-xs">
-            <div>* 让 AI 更符合项目特点进行审查</div>
+            <div>* 此处内容会追加到系统提示词末尾，不会替换系统提示词</div>
+            <div>* 可用于补充项目规范、重点风险点和审查偏好</div>
             <div>* 支持变量占位符：{project_name}, {author}, {title}, {source_branch} 等</div>
-            <div>* 留空则使用系统默认提示词</div>
+            <div>* 关闭开关或留空时，仅使用系统提示词</div>
           </div>
         </div>
 
@@ -32,7 +33,7 @@
                 <div class="text-xs text-surface-500 dark:text-surface-400">{{ promptConfig.event_rule_description || '暂无描述' }}</div>
               </div>
               <div class="flex items-center gap-2 self-start rounded-lg border border-surface-200/70 bg-surface-50 px-2.5 py-1.5 dark:border-surface-700/70 dark:bg-surface-800/70">
-                <span class="text-xs text-surface-500 dark:text-surface-400">自定义提示词</span>
+                <span class="text-xs text-surface-500 dark:text-surface-400">启用额外要求</span>
                 <ToggleSwitch
                   :model-value="Boolean(promptConfig.use_custom)"
                   @update:model-value="(value: boolean) => { promptConfig.use_custom = value; savePrompt(promptConfig) }"
@@ -44,23 +45,18 @@
               <Textarea
                 v-model="promptConfig.custom_prompt"
                 rows="10"
-                placeholder="请输入自定义的审查提示词，支持 Markdown 格式和变量占位符...
+                placeholder="请输入额外审查要求（将追加到系统提示词之后），支持 Markdown 格式和变量占位符...
 
 示例：
-请对项目 {project_name} 的 MR #{mr_iid} 进行代码审查。
-作者：{author}
-标题：{title}
-分支：{source_branch} -> {target_branch}
-
-请重点关注：
-1. 代码安全性
-2. 性能优化
-3. 最佳实践"
+在系统默认审查标准基础上，请额外关注以下要求：
+1. 严格检查 SQL 注入与鉴权绕过风险
+2. 对核心链路代码给出性能风险与复杂度建议
+3. 优先按团队规范给出可直接落地的修改建议"
                 class="min-h-[180px] w-full font-mono text-sm"
               />
               <div class="flex flex-col gap-3 rounded-lg bg-surface-50 px-3 py-2.5 dark:bg-surface-800/60 md:flex-row md:items-center md:justify-between">
                 <div class="min-w-0 text-xs leading-5 text-surface-500 dark:text-surface-400">
-                  支持的占位符：{project_name}, {author}, {title}, {description}, {source_branch}, {target_branch}, {mr_iid}, {file_count}, {changes_count}
+                  该内容会作为“附加要求”拼接到系统提示词后。支持占位符：{project_name}, {author}, {title}, {description}, {source_branch}, {target_branch}, {mr_iid}, {file_count}, {changes_count}
                 </div>
                 <Button rounded size="small" label="保存" :loading="saving" class="self-end md:self-auto" @click="savePrompt(promptConfig)">
                   <template #icon><Save class="w-4 h-4" /></template>
@@ -68,7 +64,7 @@
               </div>
             </div>
             <div v-else class="rounded-lg bg-surface-50 px-3 py-2 text-xs italic text-surface-500 dark:bg-surface-800/60 dark:text-surface-400">
-              当前使用系统默认提示词
+              当前仅使用系统提示词（无额外补充要求）
             </div>
           </div>
         </div>

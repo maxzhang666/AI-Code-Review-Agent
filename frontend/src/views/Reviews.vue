@@ -41,7 +41,20 @@
               >
                 <td class="px-3 py-3 text-surface-700 dark:text-surface-200">{{ record.id }}</td>
                 <td class="px-3 py-3">
-                  <Tag severity="info">!{{ record.merge_request_iid }}</Tag>
+                  <Tag severity="info">
+                    <span class="inline-flex items-center gap-1.5">
+                      <span>!{{ record.merge_request_iid }}</span>
+                      <button
+                        type="button"
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-sm opacity-80 transition hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        :disabled="!canOpenMr(record)"
+                        aria-label="新窗口打开MR"
+                        @click.stop="openMrInNewTab(record)"
+                      >
+                        <ExternalLink class="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  </Tag>
                 </td>
                 <td class="px-3 py-3 text-surface-800 dark:text-surface-100">{{ record.project_name }}</td>
                 <td class="max-w-[320px] px-3 py-3">
@@ -86,10 +99,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, Loader2 } from 'lucide-vue-next'
-import { getReviews } from '@/api/index'
+import { Search, Loader2, ExternalLink } from 'lucide-vue-next'
+import { getProjectDetail, getReviews } from '@/api/index'
 import { formatBackendDateTime } from '@/utils/datetime'
 import { getReviewStatusMeta } from '@/utils/reviewStatus'
+import { toast } from '@/utils/toast'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
@@ -100,6 +114,7 @@ const searchText = ref('')
 const loading = ref(false)
 const totalReviews = ref(0)
 const reviewsList = ref<any[]>([])
+const projectUrlCache = ref<Record<number, string>>({})
 
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -162,5 +177,44 @@ const goToDetail = (id: number) => {
 
 const formatReviewTime = (value: string | null | undefined): string => {
   return formatBackendDateTime(value)
+}
+
+const canOpenMr = (record: any): boolean => {
+  return Boolean(record?.merge_request_url || (record?.project_id && record?.merge_request_iid != null))
+}
+
+const buildMergeRequestUrl = (projectUrl: string, mrIid: number | null | undefined): string => {
+  if (!projectUrl || mrIid == null) return ''
+  const trimmed = projectUrl.trim()
+  if (!trimmed) return ''
+  const base = trimmed.replace(/\.git$/i, '').replace(/\/+$/, '')
+  return `${base}/-/merge_requests/${mrIid}`
+}
+
+const resolveMrUrl = async (record: any): Promise<string> => {
+  if (record?.merge_request_url) return String(record.merge_request_url)
+  const projectId = Number(record?.project_id)
+  if (!projectId || record?.merge_request_iid == null) return ''
+
+  if (!projectUrlCache.value[projectId]) {
+    try {
+      const detail = await getProjectDetail(String(projectId))
+      projectUrlCache.value[projectId] = String(detail?.project_url || '')
+    } catch (error) {
+      console.error('获取项目详情失败，无法构建 MR 链接:', error)
+      return ''
+    }
+  }
+
+  return buildMergeRequestUrl(projectUrlCache.value[projectId], record.merge_request_iid)
+}
+
+const openMrInNewTab = async (record: any) => {
+  const url = await resolveMrUrl(record)
+  if (!url) {
+    toast.warning('未能获取 MR 地址')
+    return
+  }
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 </script>

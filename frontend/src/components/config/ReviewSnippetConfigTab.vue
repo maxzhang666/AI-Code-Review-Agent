@@ -2,16 +2,16 @@
   <Card>
     <template #content>
       <div class="space-y-6">
-        <ConfigSectionHeader title="问题代码片段" dot-class="bg-cyan-500" />
+        <ConfigSectionHeader title="问题代码行" dot-class="bg-cyan-500" />
 
         <div class="rounded-xl border border-cyan-200/60 bg-gradient-to-r from-cyan-50 to-sky-50 p-4 text-cyan-700 dark:border-cyan-500/35 dark:from-cyan-500/12 dark:to-sky-500/12 dark:text-cyan-200">
           <div class="mb-2 flex items-center gap-2 font-medium">
             <Code2 class="h-4 w-4" />
-            问题代码获取策略
+            问题代码行获取策略
           </div>
           <div class="space-y-1 text-xs text-cyan-700/90 dark:text-cyan-100/90">
-            <div>1. 推荐使用“按行号计算优先”，基于 MR Diff 与行号生成问题代码。</div>
-            <div>2. 当行号无法定位时，系统会自动回退到大模型返回的代码片段。</div>
+            <div>1. 推荐使用“按行号计算优先”，基于 MR Diff 与行号生成精确问题代码行。</div>
+            <div>2. 当行号无法定位时，系统会自动回退到大模型返回内容的首行。</div>
             <div>3. 保存后对后续新审查任务生效，历史记录不受影响。</div>
           </div>
         </div>
@@ -93,14 +93,14 @@ const options: Array<{
 }> = [
   {
     title: '按行号计算优先',
-    description: '优先按 file + line_start/line_end 从 MR Diff 计算代码片段，更稳定且可追溯。',
+    description: '优先按 file + line_start 从 MR Diff 计算精确代码行，更稳定且可追溯。',
     value: 'line',
     recommended: true,
     icon: Code2,
   },
   {
     title: '大模型返回优先',
-    description: '优先使用模型返回的 code_snippet，当模型输出更完整上下文时可读性更高。',
+    description: '优先使用模型返回的 code_snippet 首行，作为精确问题代码行。',
     value: 'llm',
     recommended: false,
     icon: BrainCircuit,

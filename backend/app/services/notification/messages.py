@@ -57,10 +57,14 @@ def normalize_multiline(text: str) -> str:
 
 
 def issue_code_snippet(issue: dict[str, Any]) -> str:
-    raw = str(issue.get("code_snippet") or issue.get("problematic_code") or "").strip()
-    if not raw:
+    raw = str(issue.get("code_snippet") or issue.get("problematic_code") or "")
+    normalized = raw.replace("\r\n", "\n").replace("\r", "\n")
+    if not normalized.strip():
         return ""
-    return raw.replace("\r\n", "\n").replace("\r", "\n")
+    for line in normalized.split("\n"):
+        if line.strip():
+            return line
+    return ""
 
 
 def build_gitlab_comment_message(
@@ -126,11 +130,8 @@ def build_gitlab_comment_message(
                 lines.append(f"   - 建议: {suggestion}")
             snippet = issue_code_snippet(issue)
             if snippet:
-                lines.append("   - 代码段:")
-                lines.append("     ```")
-                for snippet_line in snippet.split("\n"):
-                    lines.append(f"     {snippet_line}")
-                lines.append("     ```")
+                safe_snippet = snippet.replace("`", "\\`")
+                lines.append(f"   - 代码行: `{safe_snippet}`")
             lines.append("")
 
     return truncate_text("\n".join(lines).strip(), 30000)

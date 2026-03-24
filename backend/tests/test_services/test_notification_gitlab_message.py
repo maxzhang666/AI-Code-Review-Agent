@@ -40,8 +40,10 @@ def test_gitlab_comment_message_renders_structured_issue_list() -> None:
     assert "1. 🔴 高危 **[reliability]** `src/main/java/Foo.java:42`" in message
     assert "问题: 可能出现空指针异常" in message
     assert "建议: 增加非空判断<br>并补充单测" in message
-    assert "代码段:" in message
+    assert "代码行:" in message
     assert "if (foo == null) {" in message
+    assert "return bar.toString();" not in message
+    assert "```" not in message
     assert "<details>" not in message
     assert "查看完整审查报告" not in message
 
@@ -84,5 +86,5 @@ def test_gitlab_comment_message_uses_problematic_code_alias_for_snippet() -> Non
         },
     )
 
-    assert "代码段:" in message
+    assert "代码行:" in message
     assert "return payload['data']['id']" in message

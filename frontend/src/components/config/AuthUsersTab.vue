@@ -170,6 +170,7 @@ import {
   updateAuthUserStatus
 } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { formatBackendDateTime } from '@/utils/datetime'
 import { toast } from '@/utils/toast'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -212,9 +213,7 @@ const isCurrentUser = (user: AuthUserItem) => user.username === auth.username
 
 const formatDateTime = (raw: string | null) => {
   if (!raw) return '从未登录'
-  const parsed = new Date(raw)
-  if (Number.isNaN(parsed.getTime())) return raw
-  return parsed.toLocaleString('zh-CN')
+  return formatBackendDateTime(raw)
 }
 
 const loadUsers = async () => {
