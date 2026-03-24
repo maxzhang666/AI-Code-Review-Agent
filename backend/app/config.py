@@ -32,7 +32,8 @@ DEFAULT_GPT_MESSAGE = """\
       "file": "path/to/file.py",
       "line": 42,
       "description": "问题描述",
-      "suggestion": "修改建议或修改后的代码示例"
+      "suggestion": "修改建议或修改后的代码示例",
+      "code_snippet": "有问题的原始代码片段（尽量精简）"
     }
   ]
 }
@@ -48,6 +49,7 @@ DEFAULT_GPT_MESSAGE = """\
   - line: 问题所在行号（无法确定时为null）
   - description: 以精炼语言、严厉语气描述问题
   - suggestion: 具体修改建议，可包含代码示例
+  - code_snippet: 触发问题的原始代码片段（没有可留空字符串）
 
 要求：
 1. 以精炼的语言、严厉的语气指出存在的问题
@@ -74,7 +76,8 @@ DEFAULT_CLAUDE_CLI_PROMPT = """\
       "file": "path/to/file.py",
       "line": 42,
       "description": "问题描述",
-      "suggestion": "修改建议"
+      "suggestion": "修改建议",
+      "code_snippet": "有问题的原始代码片段（没有可留空）"
     }
   ]
 }
@@ -146,6 +149,7 @@ class Settings(BaseSettings):
     # Review prompt
     GPT_MESSAGE: str = DEFAULT_GPT_MESSAGE
     CLAUDE_CLI_DEFAULT_PROMPT: str = DEFAULT_CLAUDE_CLI_PROMPT
+    REVIEW_CODE_SNIPPET_SOURCE: str = "line"
 
     @field_validator("CORS_ORIGINS", "EXCLUDE_FILE_TYPES", "IGNORE_FILE_TYPES", mode="before")
     @classmethod
@@ -172,6 +176,14 @@ class Settings(BaseSettings):
     @classmethod
     def _normalize_log_level(cls, value: Any) -> str:
         return value.upper() if isinstance(value, str) else "INFO"
+
+    @field_validator("REVIEW_CODE_SNIPPET_SOURCE", mode="before")
+    @classmethod
+    def _normalize_review_code_snippet_source(cls, value: Any) -> str:
+        normalized = str(value or "").strip().lower()
+        if normalized in {"line", "llm"}:
+            return normalized
+        raise ValueError("REVIEW_CODE_SNIPPET_SOURCE must be either 'line' or 'llm'")
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

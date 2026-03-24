@@ -27,6 +27,7 @@ async def _create_review_with_issues(db_session) -> MergeRequestReview:
                 "line_end": 33,
                 "description": "missing null guard",
                 "suggestion": "add a None check before dereference",
+                "code_snippet": "value = payload.get('data')\nreturn value['id']",
                 "owner": "alice",
                 "confidence": 0.95,
                 "is_blocking": True,
@@ -64,6 +65,10 @@ async def test_list_review_findings_materializes_legacy_issues(client, db_sessio
     assert first["category"]
     assert first["severity"] in {"critical", "high", "medium", "low"}
     assert first["fingerprint"]
+    assert any(
+        item.get("code_snippet") == "value = payload.get('data')\nreturn value['id']"
+        for item in payload["results"]
+    )
 
 
 @pytest.mark.asyncio
@@ -134,3 +139,39 @@ async def test_findings_default_owner_prefers_author_name_over_email(client, db_
     assert stats_resp.status_code == 200
     stats = stats_resp.json()
     assert any(item["name"] == "Alice Zhang" for item in stats["by_owner"])
+
+
+@pytest.mark.asyncio
+async def test_findings_support_problematic_code_alias(client, db_session) -> None:
+    review = MergeRequestReview(
+        project_id=7003,
+        project_name="demo-project-3",
+        merge_request_iid=33,
+        merge_request_title="feat: support problematic_code",
+        source_branch="feature/problematic-code",
+        target_branch="main",
+        author_name="Charlie",
+        author_email="charlie@example.com",
+        review_content="structured review",
+        status="completed",
+        review_issues=[
+            {
+                "severity": "high",
+                "category": "bug",
+                "file": "src/core.py",
+                "line": 18,
+                "description": "possible key error",
+                "suggestion": "guard the key access",
+                "problematic_code": "return payload['meta']['id']",
+            }
+        ],
+    )
+    db_session.add(review)
+    await db_session.commit()
+    await db_session.refresh(review)
+
+    findings_resp = await client.get(f"/api/webhook/reviews/{review.id}/findings/")
+    assert findings_resp.status_code == 200
+    findings = findings_resp.json()["results"]
+    assert len(findings) == 1
+    assert findings[0]["code_snippet"] == "return payload['meta']['id']"

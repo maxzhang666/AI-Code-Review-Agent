@@ -10,6 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import MergeRequestReview, ReviewFinding
 
 _ALLOWED_SEVERITIES = {"critical", "high", "medium", "low"}
+_ALLOWED_SNIPPET_SOURCES = {"line", "llm"}
+_HUNK_HEADER_PATTERN = re.compile(
+    r"^@@ -(?P<old_start>\d+)(?:,\d+)? \+(?P<new_start>\d+)(?:,\d+)? @@"
+)
 
 
 def _normalize_text(value: Any) -> str:
@@ -39,6 +43,174 @@ def _to_confidence(value: Any) -> float | None:
     if parsed > 1:
         return 1.0
     return parsed
+
+
+def _normalize_snippet_source(source: Any) -> str:
+    value = str(source or "").strip().lower()
+    if value in _ALLOWED_SNIPPET_SOURCES:
+        return value
+    return "line"
+
+
+def _build_diff_line_maps(diff_text: str) -> tuple[dict[int, str], dict[int, str]]:
+    new_line_map: dict[int, str] = {}
+    old_line_map: dict[int, str] = {}
+    old_line_no: int | None = None
+    new_line_no: int | None = None
+
+    for raw_line in str(diff_text or "").splitlines():
+        header_match = _HUNK_HEADER_PATTERN.match(raw_line)
+        if header_match:
+            old_line_no = int(header_match.group("old_start"))
+            new_line_no = int(header_match.group("new_start"))
+            continue
+
+        if old_line_no is None or new_line_no is None:
+            continue
+        if raw_line.startswith("\\"):
+            continue
+
+        marker = raw_line[:1]
+        content = raw_line[1:] if marker in {"+", "-", " "} else raw_line
+        if marker == "+":
+            new_line_map[new_line_no] = content
+            new_line_no += 1
+            continue
+        if marker == "-":
+            old_line_map[old_line_no] = content
+            old_line_no += 1
+            continue
+        if marker == " ":
+            new_line_map[new_line_no] = content
+            old_line_map[old_line_no] = content
+            new_line_no += 1
+            old_line_no += 1
+            continue
+
+    return new_line_map, old_line_map
+
+
+def _render_snippet_from_line_map(
+    line_map: dict[int, str],
+    *,
+    line_start: int,
+    line_end: int,
+    context_lines: int,
+) -> str:
+    if not line_map:
+        return ""
+    start = max(1, line_start - max(0, context_lines))
+    end = max(start, line_end + max(0, context_lines))
+    rows = [line_map[line_no] for line_no in range(start, end + 1) if line_no in line_map]
+    return "\n".join(rows).strip()
+
+
+def _build_change_index(changes: Any) -> dict[str, dict[str, Any]]:
+    indexed: dict[str, dict[str, Any]] = {}
+    if not isinstance(changes, list):
+        return indexed
+    for raw_change in changes:
+        if not isinstance(raw_change, dict):
+            continue
+        for field in ("new_path", "old_path"):
+            file_path = str(raw_change.get(field) or "").strip()
+            if file_path and file_path not in indexed:
+                indexed[file_path] = raw_change
+    return indexed
+
+
+def _extract_snippet_by_line(
+    *,
+    issue: dict[str, Any],
+    change: dict[str, Any],
+    context_lines: int,
+    parsed_diff_cache: dict[int, tuple[dict[int, str], dict[int, str]]],
+) -> str:
+    line_start = _to_int(issue.get("line_start"))
+    if line_start is None:
+        line_start = _to_int(issue.get("line"))
+    if line_start is None:
+        return ""
+
+    line_end = _to_int(issue.get("line_end"))
+    if line_end is None:
+        line_end = line_start
+    if line_end < line_start:
+        line_start, line_end = line_end, line_start
+
+    cache_key = id(change)
+    line_maps = parsed_diff_cache.get(cache_key)
+    if line_maps is None:
+        line_maps = _build_diff_line_maps(str(change.get("diff") or ""))
+        parsed_diff_cache[cache_key] = line_maps
+    new_line_map, old_line_map = line_maps
+
+    snippet = _render_snippet_from_line_map(
+        new_line_map,
+        line_start=line_start,
+        line_end=line_end,
+        context_lines=context_lines,
+    )
+    if snippet:
+        return snippet
+    return _render_snippet_from_line_map(
+        old_line_map,
+        line_start=line_start,
+        line_end=line_end,
+        context_lines=context_lines,
+    )
+
+
+def enrich_issues_with_code_snippets(
+    issues: Any,
+    *,
+    changes: Any,
+    source_mode: str = "line",
+    context_lines: int = 2,
+) -> list[dict[str, Any]]:
+    if not isinstance(issues, list):
+        return []
+
+    mode = _normalize_snippet_source(source_mode)
+    change_index = _build_change_index(changes if isinstance(changes, list) else [])
+    parsed_diff_cache: dict[int, tuple[dict[int, str], dict[int, str]]] = {}
+
+    enriched: list[dict[str, Any]] = []
+    for raw_issue in issues:
+        if not isinstance(raw_issue, dict):
+            continue
+
+        issue = dict(raw_issue)
+        llm_snippet = str(
+            issue.get("code_snippet")
+            or issue.get("problematic_code")
+            or issue.get("problem_code")
+            or issue.get("code")
+            or issue.get("snippet")
+            or ""
+        ).strip()
+
+        file_path = str(issue.get("file_path") or issue.get("file") or "").strip()
+        matched_change = change_index.get(file_path)
+        line_snippet = ""
+        if matched_change is not None:
+            line_snippet = _extract_snippet_by_line(
+                issue=issue,
+                change=matched_change,
+                context_lines=context_lines,
+                parsed_diff_cache=parsed_diff_cache,
+            )
+
+        if mode == "llm":
+            final_snippet = llm_snippet or line_snippet
+        else:
+            final_snippet = line_snippet or llm_snippet
+
+        issue["code_snippet"] = final_snippet
+        issue["problematic_code"] = final_snippet
+        enriched.append(issue)
+
+    return enriched
 
 
 def build_fingerprint(
@@ -86,6 +258,14 @@ def normalize_issue(
 
     message = str(issue.get("message") or issue.get("description") or "").strip()
     suggestion = str(issue.get("suggestion") or "").strip()
+    code_snippet = str(
+        issue.get("code_snippet")
+        or issue.get("problematic_code")
+        or issue.get("problem_code")
+        or issue.get("code")
+        or issue.get("snippet")
+        or ""
+    ).strip()
 
     owner_name_raw = issue.get("owner_name")
     owner_email_raw = issue.get("owner_email")
@@ -135,6 +315,7 @@ def normalize_issue(
         "line_end": line_end,
         "message": message,
         "suggestion": suggestion,
+        "code_snippet": code_snippet,
         "owner_name": owner_name or None,
         "owner_email": owner_email or None,
         "owner": owner_display,
@@ -144,6 +325,7 @@ def normalize_issue(
         "file": file_path,
         "line": line_start,
         "description": message,
+        "problematic_code": code_snippet,
     }
 
 
@@ -203,6 +385,7 @@ async def replace_review_findings(
             line_end=item.get("line_end") if isinstance(item.get("line_end"), int) else None,
             message=str(item.get("message") or ""),
             suggestion=str(item.get("suggestion") or ""),
+            code_snippet=str(item.get("code_snippet") or ""),
             owner_name=str(item.get("owner_name")) if item.get("owner_name") else None,
             owner_email=str(item.get("owner_email")) if item.get("owner_email") else None,
             owner=str(item.get("owner")) if item.get("owner") else None,

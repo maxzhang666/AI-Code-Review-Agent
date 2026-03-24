@@ -95,6 +95,7 @@ _PENDING_COLUMNS: list[tuple[str, str, str]] = [
     ("merge_request_reviews", "review_highlights", "TEXT NOT NULL DEFAULT '[]'"),
     ("review_findings", "owner_name", "VARCHAR(255) NULL"),
     ("review_findings", "owner_email", "VARCHAR(255) NULL"),
+    ("review_findings", "code_snippet", "TEXT NOT NULL DEFAULT ''"),
     ("webhook_logs", "pipeline_trace", "TEXT NOT NULL DEFAULT '{}'"),
 ]
 

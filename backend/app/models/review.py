@@ -95,6 +95,7 @@ class ReviewFinding(Base):
     line_end: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
     message: Mapped[str] = mapped_column(sa.Text, default="", server_default="")
     suggestion: Mapped[str] = mapped_column(sa.Text, default="", server_default="")
+    code_snippet: Mapped[str] = mapped_column(sa.Text, default="", server_default="")
     owner_name: Mapped[str | None] = mapped_column(sa.String(255), nullable=True, index=True)
     owner_email: Mapped[str | None] = mapped_column(sa.String(255), nullable=True, index=True)
     owner: Mapped[str | None] = mapped_column(sa.String(255), nullable=True, index=True)

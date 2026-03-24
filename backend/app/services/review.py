@@ -14,6 +14,7 @@ from app.core.logging import get_logger
 from app.llm import llm_router
 from app.llm.types import LLMRequest, LLMResponse
 from app.models import Project
+from app.utils.prompts import compose_review_prompt
 
 
 class ReviewResultParser:
@@ -85,6 +86,14 @@ class ReviewResultParser:
                 owner_name = owner
         file_path = str(item.get("file_path") or item.get("file") or "")
         message = str(item.get("message") or item.get("description") or "")
+        code_snippet = str(
+            item.get("code_snippet")
+            or item.get("problematic_code")
+            or item.get("problem_code")
+            or item.get("code")
+            or item.get("snippet")
+            or ""
+        )
         return {
             "severity": severity,
             "category": str(item.get("category") or "质量"),
@@ -97,6 +106,8 @@ class ReviewResultParser:
             "description": message,
             "message": message,
             "suggestion": str(item.get("suggestion") or ""),
+            "code_snippet": code_snippet,
+            "problematic_code": code_snippet,
             "owner_name": owner_name or None,
             "owner_email": owner_email or None,
             "owner": owner_name or owner_email or None,
@@ -205,10 +216,8 @@ class ReviewService:
             input_safety_ratio=input_safety_ratio,
         )
 
-        system_message = self._settings.GPT_MESSAGE
-        custom_prompt = payload.get("custom_prompt")
-        if isinstance(custom_prompt, str) and custom_prompt.strip():
-            system_message = custom_prompt.strip()
+        prompt_composition = compose_review_prompt(self._settings.GPT_MESSAGE, payload.get("custom_prompt"))
+        system_message = prompt_composition.prompt
 
         file_units = self._build_file_units(filtered_changes)
         chunk_plan = self._plan_chunks(file_units, input_budget_tokens)
@@ -240,6 +249,8 @@ class ReviewService:
                     "system_message_length": len(system_message),
                     "system_message_preview": system_message,
                     "system_message_preview_truncated": False,
+                    "prompt_policy": prompt_composition.policy,
+                    "conflict_detected": prompt_composition.conflict_detected,
                     "chunking_enabled": True,
                     "context_window_tokens": context_window_tokens,
                     "reserve_tokens": reserve_tokens,
@@ -311,6 +322,8 @@ class ReviewService:
                 "system_message_length": len(system_message),
                 "system_message_preview": system_message,
                 "system_message_preview_truncated": False,
+                "prompt_policy": prompt_composition.policy,
+                "conflict_detected": prompt_composition.conflict_detected,
             }
 
             llm_request = LLMRequest(
@@ -378,6 +391,8 @@ class ReviewService:
                     "system_message_length": len(system_message),
                     "system_message_preview": system_message,
                     "system_message_preview_truncated": False,
+                    "prompt_policy": prompt_composition.policy,
+                    "conflict_detected": prompt_composition.conflict_detected,
                     "chunking_enabled": True,
                     "context_window_tokens": context_window_tokens,
                     "reserve_tokens": reserve_tokens,
@@ -457,6 +472,8 @@ class ReviewService:
                     "system_message_length": len(system_message),
                     "system_message_preview": system_message,
                     "system_message_preview_truncated": False,
+                    "prompt_policy": prompt_composition.policy,
+                    "conflict_detected": prompt_composition.conflict_detected,
                 },
                 "response": reduce_response_trace,
             }
@@ -507,6 +524,8 @@ class ReviewService:
                 "system_message_length": len(system_message),
                 "system_message_preview": system_message,
                 "system_message_preview_truncated": False,
+                "prompt_policy": prompt_composition.policy,
+                "conflict_detected": prompt_composition.conflict_detected,
                 "chunking_enabled": total_chunks > 1,
                 "context_window_tokens": context_window_tokens,
                 "reserve_tokens": reserve_tokens,

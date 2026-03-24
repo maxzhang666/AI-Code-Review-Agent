@@ -19,6 +19,7 @@ from app.models import (
     MergeRequestReview,
     Project,
     ProjectWebhookEventPrompt,
+    SystemConfig,
     WebhookEventRule,
     WebhookLog,
 )
@@ -27,11 +28,18 @@ from app.services.notification import NotificationDispatcher
 from app.services.report import ReportGenerator
 from app.services.repository import RepositoryManager
 from app.services.review import ReviewResultParser, ReviewService
-from app.services.review_structured import normalize_issues, replace_review_findings
+from app.services.review_structured import (
+    enrich_issues_with_code_snippets,
+    normalize_issues,
+    replace_review_findings,
+)
+from app.utils.prompts import compose_review_prompt
 
 TaskHandler = Callable[[dict[str, Any]], Awaitable[Any] | Any]
 _TASK_REGISTRY: dict[str, TaskHandler] = {}
 _TRACE_PREVIEW_LIMIT = 8000
+_REVIEW_CODE_SNIPPET_SOURCE_KEY = "review.code_snippet_source"
+_ALLOWED_REVIEW_CODE_SNIPPET_SOURCES = {"line", "llm"}
 
 
 def register_task(task_type: str) -> Callable[[TaskHandler], TaskHandler]:
@@ -87,6 +95,32 @@ def _resolve_max_tokens(value: Any, default: int = 20480) -> int:
     if parsed <= 0:
         return default
     return parsed
+
+
+async def _resolve_review_code_snippet_source(
+    db: AsyncSession,
+    *,
+    default_source: str,
+) -> str:
+    normalized_default = str(default_source or "").strip().lower()
+    if normalized_default not in _ALLOWED_REVIEW_CODE_SNIPPET_SOURCES:
+        normalized_default = "line"
+
+    source_value = (
+        await db.execute(
+            select(SystemConfig.value)
+            .where(SystemConfig.key == _REVIEW_CODE_SNIPPET_SOURCE_KEY)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    if source_value is None:
+        return normalized_default
+
+    normalized = str(source_value).strip().lower()
+    if normalized in _ALLOWED_REVIEW_CODE_SNIPPET_SOURCES:
+        return normalized
+    return normalized_default
 
 
 def _truncate_trace_text(value: Any, limit: int = _TRACE_PREVIEW_LIMIT) -> tuple[str, bool]:
@@ -369,6 +403,11 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
             review_summary = ""
             review_highlights: list[str] = []
             filter_summary: dict[str, Any] = {}
+            changes: list[dict[str, Any]] = []
+            review_code_snippet_source = await _resolve_review_code_snippet_source(
+                db,
+                default_source=settings.REVIEW_CODE_SNIPPET_SOURCE,
+            )
             llm_text = ""
             llm_model = (
                 str((provider.config_data or {}).get("model"))
@@ -440,7 +479,8 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                     prompt_length=len(custom_prompt) if custom_prompt else 0,
                 )
 
-                prompt = (custom_prompt or settings.CLAUDE_CLI_DEFAULT_PROMPT).strip()
+                prompt_composition = compose_review_prompt(settings.CLAUDE_CLI_DEFAULT_PROMPT, custom_prompt)
+                prompt = prompt_composition.prompt
                 prompt = (
                     f"{prompt}\n\n"
                     f"Project: {project.project_name}\n"
@@ -460,6 +500,8 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                     system_message_length=len(settings.GPT_MESSAGE),
                     system_message_preview=settings.GPT_MESSAGE,
                     system_message_preview_truncated=False,
+                    prompt_policy=prompt_composition.policy,
+                    conflict_detected=prompt_composition.conflict_detected,
                 )
                 llm_request = LLMRequest(
                     prompt=prompt,
@@ -551,6 +593,8 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                         system_message_length=llm_request_trace.get("system_message_length"),
                         system_message_preview=llm_request_trace.get("system_message_preview"),
                         system_message_preview_truncated=llm_request_trace.get("system_message_preview_truncated"),
+                        prompt_policy=llm_request_trace.get("prompt_policy"),
+                        conflict_detected=llm_request_trace.get("conflict_detected"),
                         chunking_enabled=llm_request_trace.get("chunking_enabled"),
                         context_window_tokens=llm_request_trace.get("context_window_tokens"),
                         reserve_tokens=llm_request_trace.get("reserve_tokens"),
@@ -645,6 +689,12 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 raw_file_count=filter_summary.get("raw_file_count") if filter_summary else None,
                 filtered_file_count=filter_summary.get("filtered_file_count") if filter_summary else None,
                 removed_file_count=filter_summary.get("removed_file_count") if filter_summary else None,
+            )
+
+            review_issues = enrich_issues_with_code_snippets(
+                review_issues,
+                changes=changes,
+                source_mode=review_code_snippet_source,
             )
 
             review_issues = normalize_issues(

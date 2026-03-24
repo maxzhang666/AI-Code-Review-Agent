@@ -55,6 +55,7 @@ class ReviewFindingResponse(BaseModel):
     line_end: int | None = None
     message: str = ""
     suggestion: str = ""
+    code_snippet: str = ""
     owner_name: str | None = None
     owner_email: str | None = None
     owner: str | None = None
