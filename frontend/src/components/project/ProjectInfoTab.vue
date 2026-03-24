@@ -1,50 +1,107 @@
 <template>
   <Card>
     <template #content>
-      <div class="space-y-6">
-        <div class="flex items-center gap-3">
-          <div class="w-2 h-2 bg-primary rounded-full"></div>
-          <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100">项目信息</h3>
+      <div class="space-y-4">
+        <h3 class="mb-4 text-xl font-semibold tracking-tight text-color">项目信息</h3>
+
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <div class="space-y-3">
+            <div class="text-xs font-medium text-surface-500">基础信息</div>
+
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                <FolderKanban class="w-4 h-4" />
+                <span>项目名称</span>
+              </div>
+              <span class="flex-1 break-all text-right font-semibold text-surface-900 dark:text-surface-100">
+                {{ displayText(project?.project_name) }}
+              </span>
+            </div>
+
+            <div class="h-px bg-surface-200/60" />
+
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                <Boxes class="w-4 h-4" />
+                <span>命名空间</span>
+              </div>
+              <span class="flex-1 break-all text-right text-surface-800 dark:text-surface-200">
+                {{ displayText(project?.namespace) }}
+              </span>
+            </div>
+
+            <div class="h-px bg-surface-200/60" />
+
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                <Link2 class="w-4 h-4" />
+                <span>项目地址</span>
+              </div>
+              <div class="flex flex-1 min-w-0 items-center justify-end gap-1">
+                <span class="truncate text-right font-mono text-xs text-surface-800 dark:text-surface-200">
+                  {{ displayText(project?.project_url) }}
+                </span>
+                <IconButton
+                  size="small"
+                  :disabled="!project?.project_url"
+                  aria-label="打开项目地址"
+                  @click="openUrl(project?.project_url)"
+                >
+                  <ExternalLink class="w-4 h-4" />
+                </IconButton>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="text-xs font-medium text-surface-500">活动与成员</div>
+
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-2 text-xs text-surface-600">
+                <CalendarDays class="w-4 h-4" />
+                <span>创建时间</span>
+              </div>
+              <span class="text-surface-800 dark:text-surface-200">
+                {{ project?.created_at ? formatBackendDate(project.created_at) : '未知' }}
+              </span>
+            </div>
+
+            <div class="h-px bg-surface-200/60" />
+
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-2 text-xs text-surface-600">
+                <Clock3 class="w-4 h-4" />
+                <span>最后活动</span>
+              </div>
+              <span class="text-surface-800 dark:text-surface-200">
+                {{ displayText(project?.last_activity, '未知') }}
+              </span>
+            </div>
+
+            <div class="h-px bg-surface-200/60" />
+
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-2 text-xs text-surface-600">
+                <Users class="w-4 h-4" />
+                <span>团队成员</span>
+              </div>
+              <span class="font-semibold text-surface-900 dark:text-surface-100">
+                {{ project?.members_count || 0 }} 成员
+              </span>
+            </div>
+          </div>
         </div>
 
-        <dl class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3 dark:border-surface-700/60 dark:bg-surface-800/40">
-            <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">项目名称</dt>
-            <dd class="mt-1 edium text-surface-900 dark:text-surface-100 break-all">{{ project?.project_name || '-' }}</dd>
-          </div>
-          <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3 dark:border-surface-700/60 dark:bg-surface-800/40">
-            <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">命名空间</dt>
-            <dd class="mt-1 text-surface-800 dark:text-surface-200 break-all">{{ project?.namespace || '-' }}</dd>
-          </div>
-          <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3 md:col-span-2 dark:border-surface-700/60 dark:bg-surface-800/40">
-            <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">项目地址</dt>
-            <dd class="mt-1 flex items-center gap-2">
-              <span class="flex-1 truncate rimary-600">{{ project?.project_url || '-' }}</span>
-              <IconButton size="small" aria-label="打开项目地址" @click="openUrl(project?.project_url)">
-                <ExternalLink class="w-4 h-4" />
-              </IconButton>
-            </dd>
-          </div>
-          <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3 dark:border-surface-700/60 dark:bg-surface-800/40">
-            <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">创建时间</dt>
-            <dd class="mt-1 text-surface-800 dark:text-surface-200">{{ project?.created_at ? formatBackendDate(project.created_at) : '未知' }}</dd>
-          </div>
-          <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3 dark:border-surface-700/60 dark:bg-surface-800/40">
-            <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">最后活动</dt>
-            <dd class="mt-1 text-surface-800 dark:text-surface-200">{{ project?.last_activity || '未知' }}</dd>
-          </div>
-          <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3 md:col-span-2 dark:border-surface-700/60 dark:bg-surface-800/40">
-            <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">团队成员</dt>
-            <dd class="mt-1 inline-flex items-center gap-2 text-surface-800 dark:text-surface-200">
-              <Users class="w-4 h-4 text-surface-600 dark:text-surface-400" />
-              <span>{{ project?.members_count || 0 }} 成员</span>
-            </dd>
-          </div>
-        </dl>
+        <div class="h-px bg-surface-200/60" />
 
-        <div class="border-t border-surface-200/50 pt-6 dark:border-surface-700/60">
-          <div class="mb-2 text-xs font-medium uppercase tracking-wide text-surface-600 dark:text-surface-300">项目描述</div>
-          <p class="text-surface-700 dark:text-surface-200">{{ project?.description || '暂无项目描述' }}</p>
+        <div class="space-y-2">
+          <div class="inline-flex items-center gap-2 text-xs text-surface-600">
+            <FileText class="h-4 w-4" />
+            <span>项目描述</span>
+          </div>
+          <p class="text-sm leading-6 text-surface-700 dark:text-surface-200 whitespace-pre-wrap break-words">
+            {{ displayText(project?.description, '暂无项目描述') }}
+          </p>
         </div>
       </div>
     </template>
@@ -52,7 +109,16 @@
 </template>
 
 <script setup lang="ts">
-import { ExternalLink, Users } from 'lucide-vue-next'
+import {
+  ExternalLink,
+  Users,
+  CalendarDays,
+  Clock3,
+  Link2,
+  FolderKanban,
+  Boxes,
+  FileText,
+} from 'lucide-vue-next'
 import { formatBackendDate } from '@/utils/datetime'
 import IconButton from '@/components/ui/IconButton.vue'
 import Card from 'primevue/card'
@@ -61,5 +127,10 @@ defineProps<{ project: any }>()
 
 const openUrl = (url?: string) => {
   if (url) window.open(url, '_blank')
+}
+
+const displayText = (value: unknown, fallback: string = '-') => {
+  const text = String(value ?? '').trim()
+  return text || fallback
 }
 </script>

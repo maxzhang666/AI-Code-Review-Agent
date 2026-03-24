@@ -45,6 +45,16 @@
           <LLMProviderTab />
         </TabPanel>
 
+        <TabPanel value="review-snippet">
+          <ReviewSnippetConfigTab
+            v-model:source="config.system.reviewCodeSnippetSource"
+            :saving="savingSystemConfig"
+            :dirty="isSystemConfigDirty"
+            @save="handleSystemConfigSave"
+            @reset="handleSystemConfigReset"
+          />
+        </TabPanel>
+
         <TabPanel value="webhook-events">
           <WebhookEventRulesTab
             :rules="webhookEventRules"
@@ -68,10 +78,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import {
   getConfigSummary,
   batchUpdateConfig,
+  getSystemConfigs,
+  updateSystemConfigs,
   getNotificationChannels,
   getWebhookEventRules
 } from '@/api/index'
@@ -80,6 +92,7 @@ import LLMProviderTab from '@/components/config/LLMProviderTab.vue'
 import WebhookEventRulesTab from '@/components/config/WebhookEventRulesTab.vue'
 import NotificationChannelsTab from '@/components/config/NotificationChannelsTab.vue'
 import AuthUsersTab from '@/components/config/AuthUsersTab.vue'
+import ReviewSnippetConfigTab from '@/components/config/ReviewSnippetConfigTab.vue'
 import IconButton from '@/components/ui/IconButton.vue'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
@@ -91,22 +104,36 @@ const activeTab = ref('gitlab')
 const tabs = [
   { key: 'gitlab', label: 'GitLab 配置' },
   { key: 'llm-providers', label: 'LLM 供应商' },
+  { key: 'review-snippet', label: '问题代码' },
   { key: 'webhook-events', label: 'Webhook 事件' },
   { key: 'notification', label: '通知配置' },
   { key: 'auth-users', label: '账号管理' },
 ]
 const saving = ref(false)
+const savingSystemConfig = ref(false)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
 
 const config = ref({
   llm: { provider: 'openai', model: 'gpt-4', apiKey: '', apiBase: '' },
-  gitlab: { serverUrl: 'https://gitlab.com', privateToken: '', siteUrl: '' }
+  gitlab: { serverUrl: 'https://gitlab.com', privateToken: '', siteUrl: '' },
+  system: { reviewCodeSnippetSource: 'line' as 'line' | 'llm' },
 })
 
 const channels = ref<any[]>([])
 const webhookEventRules = ref<any[]>([])
 const originalConfig = ref({})
+
+const normalizeReviewCodeSnippetSource = (value: unknown): 'line' | 'llm' => {
+  const normalized = String(value || '').trim().toLowerCase()
+  return normalized === 'llm' ? 'llm' : 'line'
+}
+
+const isSystemConfigDirty = computed(() => {
+  const original = JSON.parse(JSON.stringify(originalConfig.value || {}))
+  const originalSource = normalizeReviewCodeSnippetSource(original?.system?.reviewCodeSnippetSource)
+  return config.value.system.reviewCodeSnippetSource !== originalSource
+})
 
 const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
   message.value = text
@@ -180,6 +207,14 @@ const loadConfig = async () => {
       await refreshWebhookEventRules()
     }
 
+    const systemConfigList = await getSystemConfigs()
+    if (Array.isArray(systemConfigList)) {
+      const sourceConfig = systemConfigList.find(
+        (item: any) => String(item?.key || '') === 'review.code_snippet_source'
+      )
+      config.value.system.reviewCodeSnippetSource = normalizeReviewCodeSnippetSource(sourceConfig?.value)
+    }
+
     originalConfig.value = JSON.parse(JSON.stringify(config.value))
   } catch (error) {
     console.error('Failed to load config:', error)
@@ -216,6 +251,33 @@ const handleGitLabReset = () => {
     config.value.gitlab = original.gitlab
     showMessage('GitLab 配置已重置')
   }
+}
+
+const handleSystemConfigSave = async () => {
+  savingSystemConfig.value = true
+  try {
+    await updateSystemConfigs({
+      configs: {
+        'review.code_snippet_source': config.value.system.reviewCodeSnippetSource,
+      },
+    })
+    showMessage('问题代码配置保存成功')
+    originalConfig.value = JSON.parse(JSON.stringify(config.value))
+  } catch (error) {
+    console.error('Failed to save system config:', error)
+    showMessage('保存问题代码配置失败', 'error')
+  } finally {
+    savingSystemConfig.value = false
+  }
+}
+
+const handleSystemConfigReset = () => {
+  if (!JSON.stringify(originalConfig.value)) return
+  const original = JSON.parse(JSON.stringify(originalConfig.value))
+  config.value.system.reviewCodeSnippetSource = normalizeReviewCodeSnippetSource(
+    original?.system?.reviewCodeSnippetSource
+  )
+  showMessage('问题代码配置已重置')
 }
 
 onMounted(() => loadConfig())

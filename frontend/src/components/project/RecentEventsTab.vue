@@ -8,46 +8,52 @@
         </div>
 
         <div class="space-y-4">
-          <div
-            v-for="(event, index) in events"
-            :key="index"
-            class="flex gap-4 p-4 rounded-xl bg-surface-50 hover:bg-surface-100 transition-colors duration-200 dark:bg-surface-800/70 dark:hover:bg-surface-800"
-          >
-            <div class="flex-shrink-0">
-              <div :class="['w-10 h-10 rounded-xl flex items-center justify-center', getEventBgColor(event.type)]">
-                <component :is="getEventIcon(event.type)" class="w-5 h-5 text-white" />
+          <div class="max-h-[62vh] min-h-[14rem] space-y-4 overflow-y-auto pe-1">
+            <div
+              v-for="(event, index) in events"
+              :key="index"
+              class="flex gap-4 p-4 rounded-xl bg-surface-50 hover:bg-surface-100 transition-colors duration-200 dark:bg-surface-800/70 dark:hover:bg-surface-800"
+            >
+              <div class="flex-shrink-0">
+                <div :class="['w-10 h-10 rounded-xl flex items-center justify-center', getEventBgColor(event.type)]">
+                  <component :is="getEventIcon(event.type)" class="w-5 h-5 text-white" />
+                </div>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex-1">
+                    <h4 class="font-semibold text-surface-900 dark:text-surface-100">{{ event.title }}</h4>
+                    <p class="text-xs text-surface-600 mt-0.5 dark:text-surface-300">{{ event.description }}</p>
+                  </div>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    <IconButton
+                      v-if="getGitLabEventUrl(event)"
+                      size="small"
+                      aria-label="打开事件详情"
+                      @click="openUrl(getGitLabEventUrl(event))"
+                    >
+                      <ExternalLink class="w-4 h-4" />
+                    </IconButton>
+                    <span class="text-2xs text-surface-500 dark:text-surface-400">{{ event.time }}</span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 mt-2">
+                  <div class="flex items-center gap-1.5 text-2xs text-surface-600 dark:text-surface-300">
+                    <User class="w-3 h-3" />
+                    <span>{{ event.author }}</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 text-2xs text-surface-600 dark:text-surface-300">
+                    <GitBranch class="w-3 h-3" />
+                    <span>{{ event.branch }}</span>
+                  </div>
+                  <Tag :severity="getEventTagSeverity(event.status)">{{ event.status }}</Tag>
+                </div>
               </div>
             </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-start justify-between gap-2">
-                <div class="flex-1">
-                  <h4 class="font-semibold text-surface-900 dark:text-surface-100">{{ event.title }}</h4>
-                  <p class="text-xs text-surface-600 mt-0.5 dark:text-surface-300">{{ event.description }}</p>
-                </div>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  <IconButton
-                    v-if="getGitLabEventUrl(event)"
-                    size="small"
-                    aria-label="打开事件详情"
-                    @click="openUrl(getGitLabEventUrl(event))"
-                  >
-                    <ExternalLink class="w-4 h-4" />
-                  </IconButton>
-                  <span class="text-2xs text-surface-500 dark:text-surface-400">{{ event.time }}</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-3 mt-2">
-                <div class="flex items-center gap-1.5 text-2xs text-surface-600 dark:text-surface-300">
-                  <User class="w-3 h-3" />
-                  <span>{{ event.author }}</span>
-                </div>
-                <div class="flex items-center gap-1.5 text-2xs text-surface-600 dark:text-surface-300">
-                  <GitBranch class="w-3 h-3" />
-                  <span>{{ event.branch }}</span>
-                </div>
-                <Tag :severity="getEventTagSeverity(event.status)">{{ event.status }}</Tag>
-              </div>
-            </div>
+          </div>
+
+          <div v-if="events.length === 0" class="p-8 text-center">
+            <div class="text-surface-400">暂无事件记录</div>
           </div>
 
           <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 pt-4">
@@ -67,10 +73,6 @@
               <Button v-if="currentPage < totalPages - 2" text size="small" @click="$emit('page-change', totalPages)">{{ totalPages }}</Button>
             </div>
             <Button text size="small" :disabled="currentPage === totalPages" @click="$emit('page-change', currentPage + 1)">下一页</Button>
-          </div>
-
-          <div v-if="events.length === 0" class="p-8 text-center">
-            <div class="text-surface-400">暂无事件记录</div>
           </div>
         </div>
       </div>

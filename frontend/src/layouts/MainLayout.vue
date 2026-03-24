@@ -32,8 +32,8 @@
       :class="sidebarCollapsed ? 'lg:ps-16' : 'lg:ps-72'"
     >
       <!-- Header -->
-      <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-2xl border-b border-surface-200/50 dark:bg-surface-900/88 dark:border-surface-600/65">
-        <div class="flex items-center justify-between h-16 px-6">
+      <header class="sticky top-0 z-40 h-16 border-b border-surface-200/50 bg-white/80 backdrop-blur-2xl dark:border-surface-600/65 dark:bg-surface-900/88">
+        <div class="flex h-full items-center justify-between px-6">
           <div class="flex items-center gap-4">
             <button
               type="button"

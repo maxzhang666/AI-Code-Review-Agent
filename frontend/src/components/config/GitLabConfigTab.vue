@@ -2,10 +2,7 @@
   <Card>
     <template #content>
       <div class="space-y-6">
-        <div class="flex items-center gap-3">
-          <div class="w-2 h-2 bg-orange-500 rounded-full"></div>
-          <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-0">GitLab 配置</h3>
-        </div>
+        <ConfigSectionHeader title="GitLab 配置" dot-class="bg-orange-500" />
 
         <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
           <div class="md:col-span-2 space-y-1">
@@ -42,10 +39,7 @@
         </div>
 
         <div class="space-y-4 border-t border-surface-200/50 pt-6">
-          <div class="flex items-center gap-3">
-            <div class="w-2 h-2 bg-purple-500 rounded-full"></div>
-            <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-0">Webhook 配置</h3>
-          </div>
+          <ConfigSectionHeader title="Webhook 配置" dot-class="bg-purple-500" />
 
           <div class="rounded-xl border border-purple-200/60 bg-gradient-to-r from-purple-50 to-indigo-50 p-4 text-purple-700 dark:border-purple-500/35 dark:from-purple-500/12 dark:to-indigo-500/12 dark:text-purple-200">
             <div class="mb-2 font-medium">📌 配置 GitLab Webhook</div>
@@ -74,10 +68,11 @@
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-3 border-t border-surface-200/50 pt-4">
-          <Button outlined :disabled="saving" @click="$emit('reset')">重置</Button>
-          <Button :loading="saving" @click="$emit('save')">{{ saving ? '保存中...' : '保存配置' }}</Button>
-        </div>
+        <ConfigActionBar
+          :saving="saving"
+          @reset="$emit('reset')"
+          @save="$emit('save')"
+        />
       </div>
     </template>
   </Card>
@@ -87,7 +82,8 @@
 import { computed } from 'vue'
 import { Copy, Link } from 'lucide-vue-next'
 import IconButton from '@/components/ui/IconButton.vue'
-import Button from 'primevue/button'
+import ConfigSectionHeader from '@/components/config/ConfigSectionHeader.vue'
+import ConfigActionBar from '@/components/config/ConfigActionBar.vue'
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
 

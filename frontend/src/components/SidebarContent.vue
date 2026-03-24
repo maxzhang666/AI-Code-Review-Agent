@@ -1,25 +1,21 @@
 <template>
   <div class="flex flex-col h-full overflow-hidden sidebar-shell">
-    <Card class="sidebar-card logo-card" :pt="{ body: { class: 'p-0' }, content: { class: 'p-0' } }">
-      <template #content>
-        <div class="border-b border-surface-200/50 dark:border-surface-600/65">
-          <div
-            class="flex h-16 items-center transition-all duration-300"
-            :class="collapsed ? 'px-2 justify-center' : 'px-6'"
-          >
-            <div class="flex items-center gap-3" :class="collapsed ? 'gap-0' : ''">
-              <div class="review-logo-avatar">
-                <img :src="reviewLogo" alt="AI CodeReview Logo" class="review-logo-image">
-              </div>
-              <div v-if="!collapsed" class="transition-opacity duration-200">
-                <div class="text-base font-semibold text-surface-900 tracking-tight whitespace-nowrap dark:text-surface-0">AI CodeReview</div>
-                <div class="text-2xs text-surface-500 whitespace-nowrap dark:text-surface-400">AI-Powered</div>
-              </div>
-            </div>
+    <div class="h-16 border-b border-surface-200/50 dark:border-surface-600/65">
+      <div
+        class="flex h-full items-center transition-all duration-300"
+        :class="collapsed ? 'px-2 justify-center' : 'px-6'"
+      >
+        <div class="flex items-center gap-3" :class="collapsed ? 'gap-0' : ''">
+          <div class="review-logo-avatar">
+            <img :src="reviewLogo" alt="AI CodeReview Logo" class="review-logo-image">
+          </div>
+          <div v-if="!collapsed" class="transition-opacity duration-200">
+            <div class="text-base font-semibold text-surface-900 tracking-tight whitespace-nowrap dark:text-surface-0">AI CodeReview</div>
+            <div class="text-2xs text-surface-500 whitespace-nowrap dark:text-surface-400">AI-Powered</div>
           </div>
         </div>
-      </template>
-    </Card>
+      </div>
+    </div>
 
     <div class="flex-1 py-6 overflow-y-auto transition-all duration-300" :class="collapsed ? 'px-1.5' : 'px-4'">
       <nav class="flex flex-col gap-1">
@@ -127,7 +123,6 @@ const handleNavigate = (
   background: transparent;
 }
 
-.logo-card,
 .status-card {
   flex-shrink: 0;
 }

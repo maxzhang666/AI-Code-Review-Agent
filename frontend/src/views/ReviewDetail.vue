@@ -34,77 +34,188 @@
 
             <Card>
               <template #content>
-                <dl class="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">MR ID</dt>
-                    <dd class="mt-1 flex items-center gap-2 text-surface-900 dark:text-surface-100">
-                      <span>!{{ review.merge_request_iid }}</span>
-                      <IconButton
-                        v-if="mrUrl"
-                        size="small"
-                        aria-label="新页面打开MR"
-                        @click="openMrInNewTab"
-                      >
-                        <ExternalLink class="w-3.5 h-3.5" />
-                      </IconButton>
-                    </dd>
+                <div class="space-y-4">
+                  <h3 class="mb-4 text-xl font-semibold tracking-tight text-color">基本信息</h3>
+
+                  <div class="space-y-3">
+                    <div class="grid grid-cols-1 gap-6 text-xs font-medium text-surface-500 xl:grid-cols-2">
+                      <div>MR 信息</div>
+                      <div>审查信息</div>
+                    </div>
+
+                    <div class="space-y-0">
+                      <div class="grid grid-cols-1 gap-6 py-2 xl:grid-cols-2">
+                        <div class="flex items-start justify-between gap-4">
+                          <div class="flex items-center gap-2 text-xs text-surface-600">
+                            <GitPullRequest class="h-4 w-4" />
+                            <span>MR ID</span>
+                          </div>
+                          <div class="flex items-start gap-1 pt-0.5">
+                            <span class="font-semibold leading-none text-surface-900 dark:text-surface-100">!{{ displayText(review.merge_request_iid) }}</span>
+                            <IconButton
+                              v-if="mrUrl"
+                              size="small"
+                              aria-label="新页面打开MR"
+                              @click="openMrInNewTab"
+                            >
+                              <ExternalLink class="h-3.5 w-3.5" />
+                            </IconButton>
+                          </div>
+                        </div>
+                        <div class="flex items-start justify-between gap-4">
+                          <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                            <GitBranch class="h-4 w-4" />
+                            <span>源分支</span>
+                          </div>
+                          <span class="flex-1 break-all text-right text-surface-800 dark:text-surface-200">
+                            {{ displayText(review.source_branch) }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="h-px bg-surface-200/60" />
+
+                      <div class="grid grid-cols-1 gap-6 py-2 xl:grid-cols-2">
+                        <div class="flex items-start justify-between gap-4">
+                          <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                            <FolderKanban class="h-4 w-4" />
+                            <span>项目</span>
+                          </div>
+                          <span class="flex-1 break-all text-right text-surface-800 dark:text-surface-200">
+                            {{ displayText(review.project_name) }}
+                          </span>
+                        </div>
+                        <div class="flex items-start justify-between gap-4">
+                          <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                            <Split class="h-4 w-4" />
+                            <span>目标分支</span>
+                          </div>
+                          <span class="flex-1 break-all text-right text-surface-800 dark:text-surface-200">
+                            {{ displayText(review.target_branch) }}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div class="h-px bg-surface-200/60" />
+
+                      <div class="grid grid-cols-1 gap-6 py-2 xl:grid-cols-2">
+                        <div class="flex items-start justify-between gap-4">
+                          <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                            <UserRound class="h-4 w-4" />
+                            <span>作者</span>
+                          </div>
+                          <span class="flex-1 break-all text-right text-surface-800 dark:text-surface-200">
+                            {{ displayText(review.author_name) }}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-4">
+                          <div class="flex items-center gap-2 text-xs text-surface-600">
+                            <Files class="h-4 w-4" />
+                            <span>文件数</span>
+                          </div>
+                          <span class="font-semibold text-surface-900 dark:text-surface-100">{{ review.total_files || 0 }}</span>
+                        </div>
+                      </div>
+
+                      <div class="h-px bg-surface-200/60" />
+
+                      <div class="grid grid-cols-1 gap-6 py-2 xl:grid-cols-2">
+                        <div class="flex items-start justify-between gap-4">
+                          <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                            <Mail class="h-4 w-4" />
+                            <span>邮箱</span>
+                          </div>
+                          <span class="flex-1 break-all text-right font-mono text-xs text-surface-700 dark:text-surface-300">
+                            {{ displayText(review.author_email) }}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-4">
+                          <div class="flex items-center gap-2 text-xs text-surface-600">
+                            <BadgeCheck class="h-4 w-4" />
+                            <span>评分</span>
+                          </div>
+                          <span v-if="review.review_score != null" class="font-semibold text-surface-900 dark:text-surface-100">
+                            {{ review.review_score }}<span class="text-surface-500">/100</span>
+                          </span>
+                          <span v-else class="text-surface-400">-</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">项目</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">{{ review.project_name || '-' }}</dd>
+
+                  <div class="h-px bg-surface-200/60" />
+
+                  <div class="space-y-3">
+                    <div class="grid grid-cols-1 gap-6 text-xs font-medium text-surface-500 xl:grid-cols-2">
+                      <div>模型与时间</div>
+                      <div>审查时间</div>
+                    </div>
+
+                    <div class="space-y-0">
+                      <div class="grid grid-cols-1 gap-6 py-2 xl:grid-cols-2">
+                        <div class="flex items-start justify-between gap-4">
+                          <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                            <Bot class="h-4 w-4" />
+                            <span>LLM 供应商</span>
+                          </div>
+                          <span class="flex-1 break-all text-right text-surface-800 dark:text-surface-200">
+                            {{ displayText(review.llm_provider) }}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-4">
+                          <div class="flex items-center gap-2 text-xs text-surface-600">
+                            <CalendarDays class="h-4 w-4" />
+                            <span>创建时间</span>
+                          </div>
+                          <span class="text-surface-800 dark:text-surface-200">{{ formatDisplayTime(review.created_at) }}</span>
+                        </div>
+                      </div>
+
+                      <div class="h-px bg-surface-200/60" />
+
+                      <div class="grid grid-cols-1 gap-6 py-2 xl:grid-cols-2">
+                        <div class="flex items-start justify-between gap-4">
+                          <div class="flex shrink-0 items-center gap-2 text-xs text-surface-600">
+                            <Sparkles class="h-4 w-4" />
+                            <span>LLM 模型</span>
+                          </div>
+                          <span class="flex-1 break-all text-right text-surface-800 dark:text-surface-200">
+                            {{ displayText(review.llm_model) }}
+                          </span>
+                        </div>
+                        <div class="flex items-center justify-between gap-4">
+                          <div class="flex items-center gap-2 text-xs text-surface-600">
+                            <Clock3 class="h-4 w-4" />
+                            <span>完成时间</span>
+                          </div>
+                          <span class="text-surface-800 dark:text-surface-200">{{ formatDisplayTime(review.completed_at) }}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3 md:col-span-2">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">标题</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">{{ review.merge_request_title || '-' }}</dd>
+
+                  <div class="h-px bg-surface-200/60" />
+
+                  <div class="space-y-2">
+                    <div class="inline-flex items-center gap-2 text-xs text-surface-600">
+                      <FileText class="h-4 w-4" />
+                      <span>MR 标题</span>
+                    </div>
+                    <p class="whitespace-pre-wrap break-words text-sm leading-6 text-surface-700 dark:text-surface-200">
+                      {{ displayText(review.merge_request_title) }}
+                    </p>
                   </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">作者</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">{{ review.author_name || '-' }}</dd>
+
+                  <div v-if="review.error_message" class="space-y-2 rounded-xl border border-red-200/80 bg-red-50/70 p-3 dark:border-red-500/40 dark:bg-red-500/10">
+                    <div class="inline-flex items-center gap-2 text-xs font-medium text-red-500 dark:text-red-300">
+                      <AlertTriangle class="h-4 w-4" />
+                      <span>错误信息</span>
+                    </div>
+                    <p class="whitespace-pre-wrap break-words text-sm leading-6 text-red-600 dark:text-red-200">
+                      {{ review.error_message }}
+                    </p>
                   </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">邮箱</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">{{ review.author_email || '-' }}</dd>
-                  </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">源分支</dt>
-                    <dd class="mt-1 break-all text-surface-900 dark:text-surface-100">{{ review.source_branch || '-' }}</dd>
-                  </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">目标分支</dt>
-                    <dd class="mt-1 break-all text-surface-900 dark:text-surface-100">{{ review.target_branch || '-' }}</dd>
-                  </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">评分</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">
-                      <span v-if="review.review_score != null" class="text-lg font-semibold">{{ review.review_score }}<span class="text-surface-500">/100</span></span>
-                      <span v-else class="text-surface-400">-</span>
-                    </dd>
-                  </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">文件数</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">{{ review.total_files || 0 }}</dd>
-                  </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">LLM 供应商</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">{{ review.llm_provider || '-' }}</dd>
-                  </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">LLM 模型</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">{{ review.llm_model || '-' }}</dd>
-                  </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">创建时间</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">{{ formatDisplayTime(review.created_at) }}</dd>
-                  </div>
-                  <div class="rounded-xl border border-surface-200/60 bg-surface-50/40 p-3">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-surface-500">完成时间</dt>
-                    <dd class="mt-1 text-surface-900 dark:text-surface-100">{{ formatDisplayTime(review.completed_at) }}</dd>
-                  </div>
-                  <div v-if="review.error_message" class="rounded-xl border border-red-200 bg-red-50 p-3 md:col-span-2 dark:border-red-500/35 dark:bg-red-500/12">
-                    <dt class="text-xs font-medium uppercase tracking-wide text-red-500 dark:text-red-300">错误信息</dt>
-                    <dd class="mt-1 text-red-600 dark:text-red-200">{{ review.error_message }}</dd>
-                  </div>
-                </dl>
+                </div>
               </template>
             </Card>
           </div>
@@ -200,6 +311,13 @@
                           <span v-if="issue.line" class="font-mono text-xs text-gray-400 dark:text-surface-500">L{{ issue.line }}</span>
                         </div>
                         <p class="mb-1 text-surface-800">{{ issue.description }}</p>
+                        <div v-if="issue.code_snippet" class="mt-2">
+                          <div class="mb-1 text-xs font-medium text-surface-500">
+                            问题代码
+                            <span v-if="issue.line != null" class="font-mono"> (L{{ issue.line }}<template v-if="issue.line_end != null && issue.line_end !== issue.line">-L{{ issue.line_end }}</template>)</span>
+                          </div>
+                          <pre class="overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 text-slate-100"><code>{{ issue.code_snippet }}</code></pre>
+                        </div>
                         <div v-if="issue.suggestion" class="mt-2">
                           <pre class="overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-800 p-3 text-slate-200"><code>{{ issue.suggestion }}</code></pre>
                         </div>
@@ -279,7 +397,25 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ArrowLeft, ExternalLink, Loader2 } from 'lucide-vue-next'
+import {
+  ArrowLeft,
+  ExternalLink,
+  Loader2,
+  GitPullRequest,
+  FolderKanban,
+  UserRound,
+  Mail,
+  GitBranch,
+  Split,
+  Files,
+  BadgeCheck,
+  Bot,
+  Sparkles,
+  CalendarDays,
+  Clock3,
+  FileText,
+  AlertTriangle,
+} from 'lucide-vue-next'
 import { marked } from 'marked'
 import { createReviewFindingAction, getProjectDetail, getReviewDetail, getReviewFindings } from '@/api/index'
 import { formatBackendDateTime } from '@/utils/datetime'
@@ -307,6 +443,7 @@ interface ReviewIssue {
   line_end?: number | null
   description: string
   suggestion: string
+  code_snippet: string
   owner?: string | null
 }
 
@@ -323,6 +460,7 @@ interface StructuredFinding {
   line_end: number | null
   message: string
   suggestion: string
+  code_snippet: string
   owner: string | null
   is_blocking: boolean
   is_false_positive: boolean
@@ -385,6 +523,7 @@ const issuesList = computed<ReviewIssue[]>(() => {
       line_end: item.line_end,
       description: item.message,
       suggestion: item.suggestion,
+      code_snippet: item.code_snippet || '',
       owner: item.owner,
     }))
   }
@@ -400,6 +539,7 @@ const issuesList = computed<ReviewIssue[]>(() => {
     line_end: typeof item?.line_end === 'number' ? item.line_end : null,
     description: String(item?.description || item?.message || ''),
     suggestion: String(item?.suggestion || ''),
+    code_snippet: String(item?.code_snippet || item?.problematic_code || item?.problem_code || item?.code || item?.snippet || ''),
     owner: item?.owner ? String(item.owner) : null,
   }))
 })
@@ -613,6 +753,11 @@ const openMrInNewTab = () => {
 
 const formatDisplayTime = (value: string | null | undefined): string => {
   return formatBackendDateTime(value)
+}
+
+const displayText = (value: unknown, fallback: string = '-'): string => {
+  const text = String(value ?? '').trim()
+  return text || fallback
 }
 
 const statusLabel = (status: string): string => {
