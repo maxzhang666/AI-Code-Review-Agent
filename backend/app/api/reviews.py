@@ -12,8 +12,13 @@ from app.models import MergeRequestReview, ReviewFinding, ReviewFindingAction, W
 from app.schemas.review import (
     MergeRequestReviewResponse,
     ReviewFindingActionCreate,
+    ReviewFindingBatchActionCreate,
+    ReviewFindingBatchActionResponse,
     ReviewFindingActionResponse,
     ReviewFindingResponse,
+    ReviewFindingWorkbenchItem,
+    ReviewFindingWorkbenchListResponse,
+    ReviewFindingWorkbenchReviewMeta,
     ReviewFindingStatsResponse,
     ReviewStatsBucket,
 )
@@ -285,6 +290,151 @@ async def list_review_findings(
     }
 
 
+@router.get("/review-findings/", response_model=ReviewFindingWorkbenchListResponse)
+async def list_review_findings_workbench(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    project_id: int | None = Query(default=None),
+    severities: list[str] | None = Query(default=None),
+    review_statuses: list[str] | None = Query(default=None),
+    action_statuses: list[str] | None = Query(default=None),
+    author: str | None = Query(default=None),
+    start_at: datetime | None = Query(default=None),
+    end_at: datetime | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> ReviewFindingWorkbenchListResponse:
+    skip = (page - 1) * limit
+    latest_action_ranked = (
+        select(
+            ReviewFindingAction.id.label("id"),
+            ReviewFindingAction.finding_id.label("finding_id"),
+            ReviewFindingAction.action_type.label("action_type"),
+            ReviewFindingAction.actor.label("actor"),
+            ReviewFindingAction.note.label("note"),
+            ReviewFindingAction.action_at.label("action_at"),
+            func.row_number()
+            .over(
+                partition_by=ReviewFindingAction.finding_id,
+                order_by=(ReviewFindingAction.action_at.desc(), ReviewFindingAction.id.desc()),
+            )
+            .label("rn"),
+        )
+    ).subquery("latest_action_ranked")
+    latest_action = (
+        select(
+            latest_action_ranked.c.id,
+            latest_action_ranked.c.finding_id,
+            latest_action_ranked.c.action_type,
+            latest_action_ranked.c.actor,
+            latest_action_ranked.c.note,
+            latest_action_ranked.c.action_at,
+        )
+        .where(latest_action_ranked.c.rn == 1)
+    ).subquery("latest_action")
+
+    base = (
+        select(
+            ReviewFinding,
+            MergeRequestReview,
+            latest_action.c.id.label("latest_action_id"),
+            latest_action.c.action_type.label("latest_action_type"),
+            latest_action.c.actor.label("latest_action_actor"),
+            latest_action.c.note.label("latest_action_note"),
+            latest_action.c.action_at.label("latest_action_at"),
+        )
+        .join(MergeRequestReview, MergeRequestReview.id == ReviewFinding.review_id)
+        .outerjoin(latest_action, latest_action.c.finding_id == ReviewFinding.id)
+    )
+
+    if project_id is not None:
+        base = base.where(MergeRequestReview.project_id == project_id)
+    if severities:
+        normalized_severities = [item.strip().lower() for item in severities if item and item.strip()]
+        if normalized_severities:
+            base = base.where(ReviewFinding.severity.in_(normalized_severities))
+    if review_statuses:
+        normalized_review_statuses = [item.strip().lower() for item in review_statuses if item and item.strip()]
+        if normalized_review_statuses:
+            base = base.where(MergeRequestReview.status.in_(normalized_review_statuses))
+    if author:
+        pattern = f"%{author.strip()}%"
+        base = base.where(
+            or_(
+                MergeRequestReview.author_name.ilike(pattern),
+                MergeRequestReview.author_email.ilike(pattern),
+            )
+        )
+    if start_at is not None:
+        base = base.where(ReviewFinding.created_at >= start_at)
+    if end_at is not None:
+        base = base.where(ReviewFinding.created_at <= end_at)
+    if action_statuses:
+        normalized_action_statuses = [item.strip().lower() for item in action_statuses if item and item.strip()]
+        action_types = [item for item in normalized_action_statuses if item in {"fixed", "ignored", "todo", "reopened"}]
+        include_unprocessed = "unprocessed" in normalized_action_statuses
+        status_filters = []
+        if action_types:
+            status_filters.append(latest_action.c.action_type.in_(action_types))
+        if include_unprocessed:
+            status_filters.append(latest_action.c.id.is_(None))
+        if status_filters:
+            base = base.where(or_(*status_filters))
+
+    total = (
+        await db.execute(
+            select(func.count())
+            .select_from(base.subquery())
+        )
+    ).scalar() or 0
+
+    rows = (
+        await db.execute(
+            base
+            .order_by(ReviewFinding.created_at.desc(), ReviewFinding.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+    ).all()
+
+    results: list[ReviewFindingWorkbenchItem] = []
+    for finding, review, latest_action_id, latest_action_type, latest_action_actor, latest_action_note, latest_action_at in rows:
+        review_meta = ReviewFindingWorkbenchReviewMeta(
+            id=review.id,
+            project_id=review.project_id,
+            project_name=review.project_name,
+            merge_request_iid=review.merge_request_iid,
+            merge_request_title=review.merge_request_title,
+            author_name=review.author_name,
+            author_email=review.author_email,
+            status=review.status,
+            created_at=review.created_at,
+        )
+        latest_action_payload = (
+            ReviewFindingActionResponse(
+                id=latest_action_id,
+                finding_id=finding.id,
+                action_type=latest_action_type,
+                actor=latest_action_actor,
+                note=latest_action_note or "",
+                action_at=latest_action_at,
+            )
+            if latest_action_id is not None
+            else None
+        )
+        finding_payload = ReviewFindingResponse.model_validate(finding, from_attributes=True).model_dump()
+        finding_payload["issue_id"] = finding.issue_id
+        results.append(
+            ReviewFindingWorkbenchItem(
+                **finding_payload,
+                review=review_meta,
+                latest_action=latest_action_payload,
+                action_status=str(latest_action_type or "unprocessed"),
+            )
+        )
+
+    return ReviewFindingWorkbenchListResponse(count=len(results), total=int(total), results=results)
+
+
 @router.post("/review-findings/{finding_id}/actions/", response_model=ReviewFindingActionResponse)
 async def create_review_finding_action(
     finding_id: int,
@@ -305,6 +455,52 @@ async def create_review_finding_action(
     await db.commit()
     await db.refresh(action)
     return ReviewFindingActionResponse.model_validate(action, from_attributes=True)
+
+
+@router.post("/review-findings/actions/batch/", response_model=ReviewFindingBatchActionResponse)
+async def batch_create_review_finding_actions(
+    payload: ReviewFindingBatchActionCreate,
+    db: AsyncSession = Depends(get_db),
+) -> ReviewFindingBatchActionResponse:
+    finding_ids: list[int] = []
+    seen: set[int] = set()
+    for finding_id in payload.finding_ids:
+        if finding_id in seen:
+            continue
+        seen.add(finding_id)
+        finding_ids.append(finding_id)
+
+    existing_ids = set(
+        (
+            await db.execute(
+                select(ReviewFinding.id).where(ReviewFinding.id.in_(finding_ids))
+            )
+        ).scalars().all()
+    )
+    actions: list[ReviewFindingAction] = []
+    failed_ids: list[int] = []
+    for finding_id in finding_ids:
+        if finding_id not in existing_ids:
+            failed_ids.append(finding_id)
+            continue
+        actions.append(
+            ReviewFindingAction(
+                finding_id=finding_id,
+                action_type=payload.action_type,
+                actor=payload.actor,
+                note=payload.note,
+            )
+        )
+
+    if actions:
+        db.add_all(actions)
+        await db.commit()
+
+    return ReviewFindingBatchActionResponse(
+        success_count=len(actions),
+        failed_count=len(failed_ids),
+        failed_ids=failed_ids,
+    )
 
 
 @router.get("/review-findings/stats/", response_model=ReviewFindingStatsResponse)

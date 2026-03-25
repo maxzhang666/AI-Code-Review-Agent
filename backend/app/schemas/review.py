@@ -82,6 +82,64 @@ class ReviewFindingActionResponse(BaseModel):
     action_at: datetime | None = None
 
 
+class ReviewFindingWorkbenchReviewMeta(BaseModel):
+    id: int
+    project_id: int
+    project_name: str
+    merge_request_iid: int
+    merge_request_title: str
+    author_name: str
+    author_email: str
+    status: str
+    created_at: datetime | None = None
+
+
+class ReviewFindingWorkbenchItem(BaseModel):
+    id: int
+    review_id: int
+    issue_id: str = ""
+    fingerprint: str
+    category: str
+    subcategory: str = ""
+    severity: str
+    confidence: float | None = None
+    file_path: str = ""
+    line_start: int | None = None
+    line_end: int | None = None
+    message: str = ""
+    suggestion: str = ""
+    code_snippet: str = ""
+    owner_name: str | None = None
+    owner_email: str | None = None
+    owner: str | None = None
+    is_blocking: bool = False
+    is_false_positive: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    review: ReviewFindingWorkbenchReviewMeta
+    latest_action: ReviewFindingActionResponse | None = None
+    action_status: str = "unprocessed"
+
+
+class ReviewFindingWorkbenchListResponse(BaseModel):
+    count: int
+    total: int
+    results: list[ReviewFindingWorkbenchItem] = Field(default_factory=list)
+
+
+class ReviewFindingBatchActionCreate(BaseModel):
+    finding_ids: list[int] = Field(min_length=1)
+    action_type: str = Field(pattern="^(fixed|ignored|todo|reopened)$")
+    actor: str = Field(min_length=1, max_length=255)
+    note: str = ""
+
+
+class ReviewFindingBatchActionResponse(BaseModel):
+    success_count: int
+    failed_count: int
+    failed_ids: list[int] = Field(default_factory=list)
+
+
 class ReviewStatsBucket(BaseModel):
     name: str
     value: int
