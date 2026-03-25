@@ -571,3 +571,15 @@ export const updateSystemConfigs = (data: { configs: Record<string, string> }) =
     data
   })
 }
+
+export const triggerDeveloperWeeklyLastWeekSummary = (data?: {
+  reference_date?: string
+  include_statuses?: string[]
+  use_llm?: boolean
+}) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_REPORTS_DEVELOPER_WEEKLY_GENERATE_LAST_WEEK),
+    method: 'post',
+    data
+  })
+}

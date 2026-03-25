@@ -60,8 +60,10 @@
             v-model:config="config.system.weeklySnapshotScheduler"
             :saving="savingWeeklySnapshotConfig"
             :dirty="isWeeklySnapshotConfigDirty"
+            :triggering="triggeringWeeklySnapshot"
             @save="handleWeeklySnapshotConfigSave"
             @reset="handleWeeklySnapshotConfigReset"
+            @generate-now="handleGenerateWeeklySnapshotNow"
           />
         </TabPanel>
 
@@ -95,7 +97,8 @@ import {
   getSystemConfigs,
   updateSystemConfigs,
   getNotificationChannels,
-  getWebhookEventRules
+  getWebhookEventRules,
+  triggerDeveloperWeeklyLastWeekSummary
 } from '@/api/index'
 import GitLabConfigTab from '@/components/config/GitLabConfigTab.vue'
 import LLMProviderTab from '@/components/config/LLMProviderTab.vue'
@@ -103,7 +106,10 @@ import WebhookEventRulesTab from '@/components/config/WebhookEventRulesTab.vue'
 import NotificationChannelsTab from '@/components/config/NotificationChannelsTab.vue'
 import AuthUsersTab from '@/components/config/AuthUsersTab.vue'
 import ReviewSnippetConfigTab from '@/components/config/ReviewSnippetConfigTab.vue'
-import WeeklySnapshotSchedulerConfigTab, { type WeeklySnapshotSchedulerForm } from '@/components/config/WeeklySnapshotSchedulerConfigTab.vue'
+import WeeklySnapshotSchedulerConfigTab, {
+  type WeeklySnapshotSchedulerForm,
+  type WeeklySummaryStatus
+} from '@/components/config/WeeklySnapshotSchedulerConfigTab.vue'
 import IconButton from '@/components/ui/IconButton.vue'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
@@ -124,6 +130,7 @@ const tabs = [
 const saving = ref(false)
 const savingSystemConfig = ref(false)
 const savingWeeklySnapshotConfig = ref(false)
+const triggeringWeeklySnapshot = ref(false)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
 
@@ -133,6 +140,7 @@ const defaultWeeklySnapshotSchedulerConfig = (): WeeklySnapshotSchedulerForm => 
   triggerHour: 1,
   pollSeconds: 300,
   useLlm: true,
+  includeStatuses: ['open', 'reopened'],
 })
 
 const config = ref({
@@ -166,6 +174,30 @@ const parseIntConfigValue = (value: unknown, fallback: number, min: number, max:
   return Math.min(max, Math.max(min, parsed))
 }
 
+const normalizeWeeklySummaryStatuses = (value: unknown): WeeklySummaryStatus[] => {
+  const items = Array.isArray(value) ? value : []
+  const set = new Set<WeeklySummaryStatus>()
+  for (const item of items) {
+    const raw = String(item || '').trim().toLowerCase()
+    if (raw === 'open' || raw === 'ignored' || raw === 'reopened') {
+      set.add(raw)
+    }
+  }
+  const ordered = (['open', 'ignored', 'reopened'] as WeeklySummaryStatus[]).filter((item) => set.has(item))
+  return ordered.length ? ordered : ['open', 'reopened']
+}
+
+const parseStatusConfigValue = (value: unknown): WeeklySummaryStatus[] => {
+  const text = String(value ?? '').trim()
+  if (!text) return ['open', 'reopened']
+  try {
+    const parsed = JSON.parse(text)
+    return normalizeWeeklySummaryStatuses(parsed)
+  } catch {
+    return normalizeWeeklySummaryStatuses(text.split(','))
+  }
+}
+
 const isSystemConfigDirty = computed(() => {
   const original = JSON.parse(JSON.stringify(originalConfig.value || {}))
   const originalSource = normalizeReviewCodeSnippetSource(original?.system?.reviewCodeSnippetSource)
@@ -180,6 +212,7 @@ const normalizeWeeklySnapshotScheduler = (value: unknown): WeeklySnapshotSchedul
     triggerHour: parseIntConfigValue(raw.triggerHour, 1, 0, 23),
     pollSeconds: parseIntConfigValue(raw.pollSeconds, 300, 5, 3600),
     useLlm: raw.useLlm === undefined ? true : Boolean(raw.useLlm),
+    includeStatuses: normalizeWeeklySummaryStatuses(raw.includeStatuses),
   }
 }
 
@@ -301,6 +334,9 @@ const loadConfig = async () => {
           systemConfigMap.get('reports.developer_weekly.auto_use_llm'),
           true
         ),
+        includeStatuses: parseStatusConfigValue(
+          systemConfigMap.get('reports.developer_weekly.include_statuses')
+        ),
       }
     }
 
@@ -380,6 +416,7 @@ const handleWeeklySnapshotConfigSave = async () => {
         'reports.developer_weekly.auto_trigger_hour': String(schedulerConfig.triggerHour),
         'reports.developer_weekly.auto_poll_seconds': String(schedulerConfig.pollSeconds),
         'reports.developer_weekly.auto_use_llm': String(schedulerConfig.useLlm),
+        'reports.developer_weekly.include_statuses': JSON.stringify(schedulerConfig.includeStatuses),
       },
     })
     showMessage('周报调度配置保存成功')
@@ -399,6 +436,28 @@ const handleWeeklySnapshotConfigReset = () => {
     original?.system?.weeklySnapshotScheduler
   )
   showMessage('周报调度配置已重置')
+}
+
+const handleGenerateWeeklySnapshotNow = async () => {
+  triggeringWeeklySnapshot.value = true
+  try {
+    const schedulerConfig = normalizeWeeklySnapshotScheduler(config.value.system.weeklySnapshotScheduler)
+    const response = await triggerDeveloperWeeklyLastWeekSummary({
+      include_statuses: schedulerConfig.includeStatuses,
+      use_llm: schedulerConfig.useLlm,
+    }) as { task_id?: string }
+    const taskId = String(response?.task_id || '').trim()
+    if (taskId) {
+      showMessage(`已触发上周周报生成任务：${taskId}`)
+    } else {
+      showMessage('已触发上周周报生成任务')
+    }
+  } catch (error) {
+    console.error('Failed to trigger weekly snapshot generation:', error)
+    showMessage('触发上周周报生成失败', 'error')
+  } finally {
+    triggeringWeeklySnapshot.value = false
+  }
 }
 
 onMounted(() => loadConfig())

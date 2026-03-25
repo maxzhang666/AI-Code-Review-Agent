@@ -82,6 +82,40 @@
               />
             </div>
           </div>
+
+          <div class="rounded-lg border border-surface-200/70 bg-surface-50/70 p-3 dark:border-surface-700/70 dark:bg-surface-900">
+            <div class="mb-2 text-sm font-semibold text-surface-900 dark:text-surface-0">总结纳入状态</div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="option in statusOptions"
+                :key="option.value"
+                type="button"
+                class="rounded-md border px-3 py-1.5 text-xs transition-colors"
+                :class="config.includeStatuses.includes(option.value)
+                  ? 'border-primary-400 bg-primary-50 text-primary-700 dark:border-primary-500/70 dark:bg-primary-500/15 dark:text-primary-200'
+                  : 'border-surface-300 bg-surface-0 text-surface-600 hover:border-surface-400 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-300 dark:hover:border-surface-600'"
+                @click="toggleStatus(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+            <div class="mt-2 text-xs text-surface-500">默认排除 ignored，至少保留一个状态。</div>
+          </div>
+
+          <div class="rounded-lg border border-emerald-200/70 bg-emerald-50/70 p-3 dark:border-emerald-500/35 dark:bg-emerald-500/10">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold text-emerald-800 dark:text-emerald-200">手动生成</div>
+                <div class="mt-1 text-xs text-emerald-700/90 dark:text-emerald-100/90">立即触发一次“上周成员周报”生成任务（异步入队）。</div>
+              </div>
+              <Button
+                label="立即生成上周周报"
+                size="small"
+                :loading="triggering"
+                @click="emit('generate-now')"
+              />
+            </div>
+          </div>
         </div>
 
         <ConfigActionBar
@@ -99,9 +133,12 @@
 import { CalendarClock } from 'lucide-vue-next'
 import ConfigSectionHeader from '@/components/config/ConfigSectionHeader.vue'
 import ConfigActionBar from '@/components/config/ConfigActionBar.vue'
+import Button from 'primevue/button'
 import Card from 'primevue/card'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
+
+export type WeeklySummaryStatus = 'open' | 'ignored' | 'reopened'
 
 export interface WeeklySnapshotSchedulerForm {
   enabled: boolean
@@ -109,6 +146,7 @@ export interface WeeklySnapshotSchedulerForm {
   triggerHour: number
   pollSeconds: number
   useLlm: boolean
+  includeStatuses: WeeklySummaryStatus[]
 }
 
 const props = withDefaults(
@@ -116,10 +154,12 @@ const props = withDefaults(
     config: WeeklySnapshotSchedulerForm
     saving?: boolean
     dirty?: boolean
+    triggering?: boolean
   }>(),
   {
     saving: false,
     dirty: false,
+    triggering: false,
   }
 )
 
@@ -127,6 +167,7 @@ const emit = defineEmits<{
   'update:config': [value: WeeklySnapshotSchedulerForm]
   save: []
   reset: []
+  'generate-now': []
 }>()
 
 const weekdayOptions = [
@@ -137,6 +178,12 @@ const weekdayOptions = [
   { label: '周五', value: 4 },
   { label: '周六', value: 5 },
   { label: '周日', value: 6 },
+]
+
+const statusOptions: Array<{ label: string; value: WeeklySummaryStatus }> = [
+  { label: 'open', value: 'open' },
+  { label: 'reopened', value: 'reopened' },
+  { label: 'ignored', value: 'ignored' },
 ]
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
@@ -164,6 +211,34 @@ const updateConfig = (patch: Partial<WeeklySnapshotSchedulerForm>) => {
     ...props.config,
     ...patch,
   })
+}
+
+const statusOrder: WeeklySummaryStatus[] = ['open', 'ignored', 'reopened']
+
+const normalizeStatuses = (value: unknown): WeeklySummaryStatus[] => {
+  const list = Array.isArray(value) ? value : []
+  const set = new Set<WeeklySummaryStatus>()
+  for (const item of list) {
+    const text = String(item || '').trim().toLowerCase()
+    if (text === 'open' || text === 'ignored' || text === 'reopened') {
+      set.add(text)
+    }
+  }
+  const normalized = statusOrder.filter((item) => set.has(item))
+  return normalized.length ? normalized : ['open', 'reopened']
+}
+
+const toggleStatus = (status: WeeklySummaryStatus) => {
+  const current = normalizeStatuses(props.config.includeStatuses)
+  const set = new Set<WeeklySummaryStatus>(current)
+  if (set.has(status)) {
+    if (set.size <= 1) return
+    set.delete(status)
+  } else {
+    set.add(status)
+  }
+  const next = statusOrder.filter((item) => set.has(item))
+  updateConfig({ includeStatuses: next })
 }
 
 const onTriggerHourInput = (event: Event) => {

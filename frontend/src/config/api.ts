@@ -90,6 +90,7 @@ export const API_ENDPOINTS = {
 
   // System Configs
   SYSTEM_CONFIGS: '/system/configs/',
+  SYSTEM_REPORTS_DEVELOPER_WEEKLY_GENERATE_LAST_WEEK: '/system/reports/developers/weekly/generate-last-week',
 }
 
 // 完整URL生成函数
