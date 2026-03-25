@@ -582,8 +582,8 @@ const reviewStatusSeverity = (status: string): 'success' | 'info' | 'danger' | '
 
 const formatDisplayTime = (value: string | null | undefined): string => formatBackendDateTime(value)
 
-onMounted(async () => {
-  await fetchProjects()
-  await fetchFindings()
+onMounted(() => {
+  void fetchProjects()
+  void fetchFindings()
 })
 </script>

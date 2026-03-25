@@ -28,6 +28,7 @@ from app.services.review_structured import materialize_review_findings_from_lega
 router = APIRouter()
 
 ALLOWED_ACTION_STATUSES = ("unprocessed", "fixed", "todo", "ignored", "reopened")
+LEGACY_MATERIALIZATION_BATCH_SIZE = 200
 
 
 def _to_bucket_rows(rows: list[tuple[Any, Any]]) -> list[ReviewStatsBucket]:
@@ -37,6 +38,41 @@ def _to_bucket_rows(rows: list[tuple[Any, Any]]) -> list[ReviewStatsBucket]:
         count = int(value or 0)
         result.append(ReviewStatsBucket(name=label, value=count))
     return result
+
+
+async def _materialize_legacy_findings_for_workbench(
+    db: AsyncSession,
+    *,
+    project_id: int | None,
+    normalized_review_statuses: list[str],
+    author: str | None,
+    limit: int = LEGACY_MATERIALIZATION_BATCH_SIZE,
+) -> None:
+    stmt = (
+        select(MergeRequestReview)
+        .outerjoin(ReviewFinding, ReviewFinding.review_id == MergeRequestReview.id)
+        .where(ReviewFinding.id.is_(None))
+        .order_by(MergeRequestReview.created_at.desc(), MergeRequestReview.id.desc())
+        .limit(limit)
+    )
+    if project_id is not None:
+        stmt = stmt.where(MergeRequestReview.project_id == project_id)
+    if normalized_review_statuses:
+        stmt = stmt.where(MergeRequestReview.status.in_(normalized_review_statuses))
+    if author:
+        pattern = f"%{author.strip()}%"
+        stmt = stmt.where(
+            or_(
+                MergeRequestReview.author_name.ilike(pattern),
+                MergeRequestReview.author_email.ilike(pattern),
+            )
+        )
+
+    candidates = (await db.execute(stmt)).scalars().all()
+    for review in candidates:
+        if not isinstance(review.review_issues, list) or not review.review_issues:
+            continue
+        await materialize_review_findings_from_legacy(db, review=review)
 
 
 @router.get("/dashboard/stats/")
@@ -306,6 +342,18 @@ async def list_review_findings_workbench(
     db: AsyncSession = Depends(get_db),
 ) -> ReviewFindingWorkbenchListResponse:
     skip = (page - 1) * limit
+    normalized_review_statuses = (
+        [item.strip().lower() for item in review_statuses if item and item.strip()]
+        if review_statuses
+        else []
+    )
+    await _materialize_legacy_findings_for_workbench(
+        db,
+        project_id=project_id,
+        normalized_review_statuses=normalized_review_statuses,
+        author=author,
+    )
+
     latest_action_ranked = (
         select(
             ReviewFindingAction.id.label("id"),
@@ -354,10 +402,8 @@ async def list_review_findings_workbench(
         normalized_severities = [item.strip().lower() for item in severities if item and item.strip()]
         if normalized_severities:
             base = base.where(ReviewFinding.severity.in_(normalized_severities))
-    if review_statuses:
-        normalized_review_statuses = [item.strip().lower() for item in review_statuses if item and item.strip()]
-        if normalized_review_statuses:
-            base = base.where(MergeRequestReview.status.in_(normalized_review_statuses))
+    if normalized_review_statuses:
+        base = base.where(MergeRequestReview.status.in_(normalized_review_statuses))
     if author:
         pattern = f"%{author.strip()}%"
         base = base.where(

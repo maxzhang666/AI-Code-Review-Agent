@@ -3,11 +3,20 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 
 from app.models import MergeRequestReview, ReviewFinding, ReviewFindingAction
 
 
-async def _create_review(db_session, *, project_id: int, status: str, author_name: str, author_email: str) -> MergeRequestReview:
+async def _create_review(
+    db_session,
+    *,
+    project_id: int,
+    status: str,
+    author_name: str,
+    author_email: str,
+    review_issues: list[dict] | None = None,
+) -> MergeRequestReview:
     review = MergeRequestReview(
         project_id=project_id,
         project_name=f"project-{project_id}",
@@ -19,7 +28,7 @@ async def _create_review(db_session, *, project_id: int, status: str, author_nam
         author_email=author_email,
         review_content="review",
         status=status,
-        review_issues=[],
+        review_issues=review_issues if review_issues is not None else [],
     )
     db_session.add(review)
     await db_session.commit()
@@ -330,3 +339,47 @@ async def test_workbench_list_uses_newest_action_as_latest_status(client, db_ses
     assert result["latest_action"]["action_type"] == "fixed"
     assert result["latest_action"]["actor"] == "bob"
     assert result["latest_action"]["note"] == "newer action"
+
+
+@pytest.mark.asyncio
+async def test_workbench_list_materializes_legacy_review_issues(client, db_session) -> None:
+    review = await _create_review(
+        db_session,
+        project_id=9300,
+        status="completed",
+        author_name="Legacy Author",
+        author_email="legacy@example.com",
+        review_issues=[
+            {
+                "severity": "high",
+                "category": "bug",
+                "file": "src/legacy.py",
+                "line": 18,
+                "description": "legacy issue not yet materialized",
+                "suggestion": "guard access",
+            }
+        ],
+    )
+
+    before = (
+        await db_session.execute(
+            select(ReviewFinding.id).where(ReviewFinding.review_id == review.id)
+        )
+    ).scalars().all()
+    assert before == []
+
+    response = await client.get(
+        "/api/webhook/review-findings/",
+        params={"project_id": 9300},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] >= 1
+    assert any(item["review"]["id"] == review.id for item in payload["results"])
+
+    after = (
+        await db_session.execute(
+            select(ReviewFinding.id).where(ReviewFinding.review_id == review.id)
+        )
+    ).scalars().all()
+    assert len(after) == 1
