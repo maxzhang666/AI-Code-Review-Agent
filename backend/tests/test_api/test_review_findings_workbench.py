@@ -383,3 +383,80 @@ async def test_workbench_list_materializes_legacy_review_issues(client, db_sessi
         )
     ).scalars().all()
     assert len(after) == 1
+
+
+@pytest.mark.asyncio
+async def test_workbench_list_materializes_legacy_issues_beyond_first_scan_window(client, db_session) -> None:
+    project_id = 9400
+    base_time = datetime(2026, 3, 25, 8, 0, 0)
+    empty_reviews: list[MergeRequestReview] = []
+    for idx in range(220):
+        ts = base_time + timedelta(minutes=idx)
+        empty_reviews.append(
+            MergeRequestReview(
+                project_id=project_id,
+                project_name=f"project-{project_id}",
+                merge_request_iid=10000 + idx,
+                merge_request_title=f"empty-{idx}",
+                source_branch="feature/empty",
+                target_branch="main",
+                author_name="Empty Author",
+                author_email="empty@example.com",
+                review_content="review",
+                status="completed",
+                review_issues=[],
+                created_at=ts,
+                updated_at=ts,
+            )
+        )
+    legacy_ts = base_time - timedelta(days=2)
+    legacy_review = MergeRequestReview(
+        project_id=project_id,
+        project_name=f"project-{project_id}",
+        merge_request_iid=9999,
+        merge_request_title="legacy-beyond-window",
+        source_branch="feature/legacy",
+        target_branch="main",
+        author_name="Legacy Window Author",
+        author_email="legacy-window@example.com",
+        review_content="review",
+        status="completed",
+        review_issues=[
+            {
+                "severity": "high",
+                "category": "bug",
+                "file": "src/window.py",
+                "line": 7,
+                "description": "legacy beyond first window",
+                "suggestion": "add guard",
+            }
+        ],
+        created_at=legacy_ts,
+        updated_at=legacy_ts,
+    )
+    db_session.add_all([*empty_reviews, legacy_review])
+    await db_session.commit()
+    await db_session.refresh(legacy_review)
+
+    before = (
+        await db_session.execute(
+            select(ReviewFinding.id).where(ReviewFinding.review_id == legacy_review.id)
+        )
+    ).scalars().all()
+    assert before == []
+
+    response = await client.get(
+        "/api/webhook/review-findings/",
+        params={"project_id": project_id},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] >= 1
+    assert any(item["review"]["id"] == legacy_review.id for item in payload["results"])
+
+    after = (
+        await db_session.execute(
+            select(ReviewFinding.id).where(ReviewFinding.review_id == legacy_review.id)
+        )
+    ).scalars().all()
+    assert len(after) == 1
