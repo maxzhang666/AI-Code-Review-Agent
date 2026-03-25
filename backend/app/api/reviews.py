@@ -29,6 +29,7 @@ router = APIRouter()
 
 ALLOWED_ACTION_STATUSES = ("unprocessed", "fixed", "todo", "ignored", "reopened")
 LEGACY_MATERIALIZATION_BATCH_SIZE = 200
+LEGACY_MATERIALIZATION_SCAN_CAP = 2000
 
 
 def _to_bucket_rows(rows: list[tuple[Any, Any]]) -> list[ReviewStatsBucket]:
@@ -47,32 +48,48 @@ async def _materialize_legacy_findings_for_workbench(
     normalized_review_statuses: list[str],
     author: str | None,
     limit: int = LEGACY_MATERIALIZATION_BATCH_SIZE,
+    scan_cap: int = LEGACY_MATERIALIZATION_SCAN_CAP,
 ) -> None:
-    stmt = (
-        select(MergeRequestReview)
-        .outerjoin(ReviewFinding, ReviewFinding.review_id == MergeRequestReview.id)
-        .where(ReviewFinding.id.is_(None))
-        .order_by(MergeRequestReview.created_at.desc(), MergeRequestReview.id.desc())
-        .limit(limit)
-    )
-    if project_id is not None:
-        stmt = stmt.where(MergeRequestReview.project_id == project_id)
-    if normalized_review_statuses:
-        stmt = stmt.where(MergeRequestReview.status.in_(normalized_review_statuses))
-    if author:
-        pattern = f"%{author.strip()}%"
-        stmt = stmt.where(
-            or_(
-                MergeRequestReview.author_name.ilike(pattern),
-                MergeRequestReview.author_email.ilike(pattern),
-            )
-        )
+    scanned = 0
+    offset = 0
+    materialized = 0
 
-    candidates = (await db.execute(stmt)).scalars().all()
-    for review in candidates:
-        if not isinstance(review.review_issues, list) or not review.review_issues:
-            continue
-        await materialize_review_findings_from_legacy(db, review=review)
+    while materialized < limit and scanned < scan_cap:
+        stmt = (
+            select(MergeRequestReview)
+            .outerjoin(ReviewFinding, ReviewFinding.review_id == MergeRequestReview.id)
+            .where(ReviewFinding.id.is_(None))
+            .where(MergeRequestReview.review_issues != [])
+            .order_by(MergeRequestReview.created_at.desc(), MergeRequestReview.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        if project_id is not None:
+            stmt = stmt.where(MergeRequestReview.project_id == project_id)
+        if normalized_review_statuses:
+            stmt = stmt.where(MergeRequestReview.status.in_(normalized_review_statuses))
+        if author:
+            pattern = f"%{author.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    MergeRequestReview.author_name.ilike(pattern),
+                    MergeRequestReview.author_email.ilike(pattern),
+                )
+            )
+
+        candidates = (await db.execute(stmt)).scalars().all()
+        if not candidates:
+            break
+
+        scanned += len(candidates)
+        offset += len(candidates)
+        for review in candidates:
+            if not isinstance(review.review_issues, list) or not review.review_issues:
+                continue
+            await materialize_review_findings_from_legacy(db, review=review)
+            materialized += 1
+            if materialized >= limit:
+                break
 
 
 @router.get("/dashboard/stats/")
