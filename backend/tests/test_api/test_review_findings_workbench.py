@@ -460,3 +460,70 @@ async def test_workbench_list_materializes_legacy_issues_beyond_first_scan_windo
         )
     ).scalars().all()
     assert len(after) == 1
+
+
+@pytest.mark.asyncio
+async def test_workbench_list_orders_by_review_created_at_desc(client, db_session) -> None:
+    older_review_time = datetime(2026, 3, 20, 9, 0, 0)
+    newer_review_time = datetime(2026, 3, 22, 9, 0, 0)
+
+    older_review = MergeRequestReview(
+        project_id=9500,
+        project_name="project-9500",
+        merge_request_iid=9500,
+        merge_request_title="older-review",
+        source_branch="feature/older",
+        target_branch="main",
+        author_name="Older",
+        author_email="older@example.com",
+        review_content="older",
+        status="completed",
+        review_issues=[],
+        created_at=older_review_time,
+        updated_at=older_review_time,
+    )
+    newer_review = MergeRequestReview(
+        project_id=9500,
+        project_name="project-9500",
+        merge_request_iid=9501,
+        merge_request_title="newer-review",
+        source_branch="feature/newer",
+        target_branch="main",
+        author_name="Newer",
+        author_email="newer@example.com",
+        review_content="newer",
+        status="completed",
+        review_issues=[],
+        created_at=newer_review_time,
+        updated_at=newer_review_time,
+    )
+    db_session.add_all([older_review, newer_review])
+    await db_session.commit()
+    await db_session.refresh(older_review)
+    await db_session.refresh(newer_review)
+
+    # Intentionally make the older review's finding newer by finding timestamp
+    # to verify ordering is based on review created_at.
+    older_finding = await _create_finding(
+        db_session,
+        review_id=older_review.id,
+        severity="high",
+        message="older-review-finding",
+        created_at=datetime(2026, 3, 23, 8, 0, 0),
+    )
+    newer_finding = await _create_finding(
+        db_session,
+        review_id=newer_review.id,
+        severity="medium",
+        message="newer-review-finding",
+        created_at=datetime(2026, 3, 21, 8, 0, 0),
+    )
+
+    response = await client.get(
+        "/api/webhook/review-findings/",
+        params={"project_id": 9500, "limit": 20, "page": 1},
+    )
+    assert response.status_code == 200
+    rows = response.json()["results"]
+    ids = [item["id"] for item in rows if item["id"] in {older_finding.id, newer_finding.id}]
+    assert ids[:2] == [newer_finding.id, older_finding.id]

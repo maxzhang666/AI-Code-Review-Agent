@@ -476,7 +476,11 @@ async def list_review_findings_workbench(
     rows = (
         await db.execute(
             base
-            .order_by(ReviewFinding.created_at.desc(), ReviewFinding.id.desc())
+            .order_by(
+                MergeRequestReview.created_at.desc(),
+                MergeRequestReview.id.desc(),
+                ReviewFinding.id.desc(),
+            )
             .offset(skip)
             .limit(limit)
         )
