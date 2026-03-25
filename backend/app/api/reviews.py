@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db
@@ -51,17 +51,16 @@ async def _materialize_legacy_findings_for_workbench(
     scan_cap: int = LEGACY_MATERIALIZATION_SCAN_CAP,
 ) -> None:
     scanned = 0
-    offset = 0
     materialized = 0
+    cursor_created_at: datetime | None = None
+    cursor_id: int | None = None
 
     while materialized < limit and scanned < scan_cap:
         stmt = (
             select(MergeRequestReview)
             .outerjoin(ReviewFinding, ReviewFinding.review_id == MergeRequestReview.id)
             .where(ReviewFinding.id.is_(None))
-            .where(MergeRequestReview.review_issues != [])
             .order_by(MergeRequestReview.created_at.desc(), MergeRequestReview.id.desc())
-            .offset(offset)
             .limit(limit)
         )
         if project_id is not None:
@@ -76,13 +75,25 @@ async def _materialize_legacy_findings_for_workbench(
                     MergeRequestReview.author_email.ilike(pattern),
                 )
             )
+        if cursor_created_at is not None and cursor_id is not None:
+            stmt = stmt.where(
+                or_(
+                    MergeRequestReview.created_at < cursor_created_at,
+                    and_(
+                        MergeRequestReview.created_at == cursor_created_at,
+                        MergeRequestReview.id < cursor_id,
+                    ),
+                )
+            )
 
         candidates = (await db.execute(stmt)).scalars().all()
         if not candidates:
             break
 
         scanned += len(candidates)
-        offset += len(candidates)
+        tail = candidates[-1]
+        cursor_created_at = tail.created_at
+        cursor_id = tail.id
         for review in candidates:
             if not isinstance(review.review_issues, list) or not review.review_issues:
                 continue
