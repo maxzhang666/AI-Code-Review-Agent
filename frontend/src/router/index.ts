@@ -56,6 +56,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '问题分析', icon: 'BarChart3' }
       },
       {
+        path: 'issue-workbench',
+        name: 'IssueWorkbench',
+        component: () => import('@/views/IssueWorkbench.vue'),
+        meta: { title: 'Issue 工作台', icon: 'ListTodo' }
+      },
+      {
         path: 'weekly-feedback-report',
         name: 'WeeklyFeedbackReport',
         component: () => import('@/views/WeeklyFeedbackReport.vue'),

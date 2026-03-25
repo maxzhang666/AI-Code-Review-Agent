@@ -48,12 +48,33 @@ export const getReviewFindings = (id: string | number) => {
   })
 }
 
+export const getReviewFindingsList = (params?: any) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.REVIEW_FINDINGS_LIST),
+    method: 'get',
+    params
+  })
+}
+
 export const createReviewFindingAction = (
   id: string | number,
   data: { action_type: 'fixed' | 'ignored' | 'todo' | 'reopened'; actor: string; note?: string }
 ) => {
   return request({
     url: getApiUrl(API_ENDPOINTS.REVIEW_FINDING_ACTIONS(id)),
+    method: 'post',
+    data
+  })
+}
+
+export const createReviewFindingActionsBatch = (data: {
+  finding_ids: number[]
+  action_type: 'fixed' | 'ignored' | 'todo' | 'reopened'
+  actor: string
+  note?: string
+}) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.REVIEW_FINDING_ACTIONS_BATCH),
     method: 'post',
     data
   })
