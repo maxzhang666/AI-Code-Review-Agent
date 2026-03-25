@@ -280,6 +280,7 @@ class GitLabService:
             hook = project.hooks.create({
                 "url": webhook_url,
                 "merge_requests_events": True,
+                "note_events": True,
                 "push_events": False,
                 "enable_ssl_verification": True,
             })
@@ -294,3 +295,43 @@ class GitLabService:
                 project_id=project_id,
             )
             return {"success": False, "error": str(exc)}
+
+    async def get_project_member_access_level(
+        self,
+        project_id: int,
+        user_id: int,
+    ) -> int | None:
+        client = await self._ensure_client()
+
+        def _sync_call() -> int | None:
+            project = client.projects.get(project_id)
+            member = None
+            try:
+                member = project.members.get(user_id)
+            except Exception:
+                members_all = getattr(project, "members_all", None)
+                if members_all is not None:
+                    try:
+                        member = members_all.get(user_id)
+                    except Exception:
+                        member = None
+
+            if member is None:
+                return None
+
+            level = getattr(member, "access_level", None)
+            try:
+                return int(level) if level is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        try:
+            return await asyncio.to_thread(_sync_call)
+        except Exception as exc:
+            self._logger.log_error_with_context(
+                "gitlab_get_project_member_access_level_failed",
+                error=exc,
+                project_id=project_id,
+                user_id=user_id,
+            )
+            return None

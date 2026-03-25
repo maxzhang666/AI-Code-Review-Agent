@@ -10,6 +10,29 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '登录', public: true, hidden: true }
   },
   {
+    path: '/weekly-report',
+    redirect: '/weekly-report/members',
+    meta: { public: true, hidden: true }
+  },
+  {
+    path: '/weekly-report/team',
+    name: 'PublicWeeklyReportTeam',
+    component: () => import('@/views/PublicWeeklyTeamReport.vue'),
+    meta: { title: '团队周报', public: true, hidden: true }
+  },
+  {
+    path: '/weekly-report/members',
+    name: 'PublicWeeklyReportMembers',
+    component: () => import('@/views/PublicWeeklyMemberList.vue'),
+    meta: { title: '成员周报', public: true, hidden: true }
+  },
+  {
+    path: '/weekly-report/members/:owner',
+    name: 'PublicWeeklyReportMemberDetail',
+    component: () => import('@/views/PublicWeeklyMemberDetail.vue'),
+    meta: { title: '成员周报详情', public: true, hidden: true }
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: '/dashboard',
@@ -31,6 +54,12 @@ const routes: RouteRecordRaw[] = [
         name: 'ReviewInsights',
         component: () => import('@/views/ReviewInsights.vue'),
         meta: { title: '问题分析', icon: 'BarChart3' }
+      },
+      {
+        path: 'weekly-feedback-report',
+        name: 'WeeklyFeedbackReport',
+        component: () => import('@/views/WeeklyFeedbackReport.vue'),
+        meta: { title: '团队周报', icon: 'CalendarRange', public: true }
       },
       {
         path: 'reviews/:id',

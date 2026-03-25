@@ -80,6 +80,7 @@ async def test_create_project_hook_creates_when_url_not_exists(
         {
             "url": "https://site.example/api/webhook/gitlab/",
             "merge_requests_events": True,
+            "note_events": True,
             "push_events": False,
             "enable_ssl_verification": True,
         }
@@ -136,3 +137,61 @@ async def test_list_projects_uses_created_at_desc_sorting(
         "sort": "desc",
         "search": "repo",
     }
+
+
+@pytest.mark.asyncio
+async def test_get_project_member_access_level_returns_role(
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeMembers:
+        def get(self, user_id: int) -> SimpleNamespace:
+            assert user_id == 77
+            return SimpleNamespace(access_level=40)
+
+    class _FakeProjectsForMember:
+        def get(self, project_id: int) -> SimpleNamespace:
+            assert project_id == 11
+            return SimpleNamespace(members=_FakeMembers())
+
+    class _FakeMemberClient:
+        projects = _FakeProjectsForMember()
+
+    svc = GitLabService(db_session)
+
+    async def _fake_ensure_client():
+        return _FakeMemberClient()
+
+    monkeypatch.setattr(svc, "_ensure_client", _fake_ensure_client)
+
+    level = await svc.get_project_member_access_level(project_id=11, user_id=77)
+
+    assert level == 40
+
+
+@pytest.mark.asyncio
+async def test_get_project_member_access_level_returns_none_when_not_found(
+    db_session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeMembers:
+        def get(self, _user_id: int) -> SimpleNamespace:
+            raise RuntimeError("not found")
+
+    class _FakeProjectsForMember:
+        def get(self, _project_id: int) -> SimpleNamespace:
+            return SimpleNamespace(members=_FakeMembers())
+
+    class _FakeMemberClient:
+        projects = _FakeProjectsForMember()
+
+    svc = GitLabService(db_session)
+
+    async def _fake_ensure_client():
+        return _FakeMemberClient()
+
+    monkeypatch.setattr(svc, "_ensure_client", _fake_ensure_client)
+
+    level = await svc.get_project_member_access_level(project_id=11, user_id=88)
+
+    assert level is None

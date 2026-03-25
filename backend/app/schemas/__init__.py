@@ -22,6 +22,7 @@ from app.schemas.notification import (
     NotificationChannelResponse,
     NotificationChannelUpdate,
 )
+from app.schemas.mr_feedback import MRFeedbackRecordResponse
 from app.schemas.project import (
     GitLabProjectSearchItem,
     ProjectImport,
@@ -53,6 +54,7 @@ __all__ = [
     "LLMProviderResponse",
     "LLMProviderUpdate",
     "MergeRequestReviewResponse",
+    "MRFeedbackRecordResponse",
     "NotificationChannelCreate",
     "NotificationChannelResponse",
     "NotificationChannelUpdate",

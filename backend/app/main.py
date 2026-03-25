@@ -5,7 +5,19 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, config, event_rules, llm, notifications, projects, reviews, system, webhook
+from app.api import (
+    auth,
+    config,
+    event_rules,
+    llm,
+    mr_feedback,
+    notifications,
+    projects,
+    reports,
+    reviews,
+    system,
+    webhook,
+)
 from app.config import get_settings
 from app.core.auth import get_current_user
 from app.core.exceptions import register_exception_handlers
@@ -13,10 +25,12 @@ from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestIDMiddleware, RequestTimingMiddleware
 from app.database import init_db
 from app.queue.manager import QueueManager
+from app.services.reporting.weekly_snapshot_scheduler import DeveloperWeeklySnapshotScheduler
 
 import app.models  # noqa: F401 — register all model metadata before init_db
 
 queue_manager = QueueManager()
+weekly_snapshot_scheduler = DeveloperWeeklySnapshotScheduler(queue_manager)
 
 
 @asynccontextmanager
@@ -39,10 +53,12 @@ async def lifespan(_app: FastAPI):
 
     await init_db()
     await queue_manager.start_worker()
+    await weekly_snapshot_scheduler.start()
     _app.state.queue_manager = queue_manager
     try:
         yield
     finally:
+        await weekly_snapshot_scheduler.stop()
         await queue_manager.stop_worker()
         logger.info("application_stopped")
 
@@ -99,6 +115,17 @@ def create_app() -> FastAPI:
         prefix="/api/webhook",
         tags=["reviews"],
         dependencies=protected_dependencies,
+    )
+    app.include_router(
+        mr_feedback.router,
+        prefix="/api/webhook",
+        tags=["mr-feedback"],
+        dependencies=protected_dependencies,
+    )
+    app.include_router(
+        reports.router,
+        prefix="/api/webhook",
+        tags=["reports"],
     )
     app.include_router(llm.router, prefix="/api", tags=["llm"], dependencies=protected_dependencies)
     app.include_router(config.router, prefix="/api", tags=["config"], dependencies=protected_dependencies)

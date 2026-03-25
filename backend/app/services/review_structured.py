@@ -52,6 +52,14 @@ def _normalize_snippet_source(source: Any) -> str:
     return "line"
 
 
+def _normalize_issue_identifier(issue: dict[str, Any]) -> str:
+    for key in ("issue_id", "id", "fingerprint"):
+        raw = str(issue.get(key) or "").strip()
+        if raw:
+            return raw[:64]
+    return ""
+
+
 def _to_single_line_code(value: Any) -> str:
     text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
     if not text.strip():
@@ -271,6 +279,7 @@ def normalize_issue(
 
     owner_display = owner_name or owner_email or None
 
+    issue_id = _normalize_issue_identifier(issue)
     confidence = _to_confidence(issue.get("confidence"))
     is_blocking = (
         bool(issue.get("is_blocking"))
@@ -288,6 +297,7 @@ def normalize_issue(
     )
 
     return {
+        "issue_id": issue_id or fingerprint[:64],
         "fingerprint": fingerprint,
         "category": category,
         "subcategory": subcategory,
@@ -358,6 +368,7 @@ async def replace_review_findings(
     for item in normalized:
         row = ReviewFinding(
             review_id=review.id,
+            issue_id=str(item.get("issue_id") or "")[:64],
             fingerprint=str(item.get("fingerprint") or ""),
             category=str(item.get("category") or "quality"),
             subcategory=str(item.get("subcategory") or ""),

@@ -71,6 +71,42 @@ export const getReviewFindingsStats = (params?: {
   })
 }
 
+export const getMRFeedbackWeeklyReport = (params?: {
+  project_id?: number
+  anchor_date?: string
+}) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.MR_FEEDBACK_WEEKLY_REPORT),
+    method: 'get',
+    params
+  })
+}
+
+export const getDeveloperWeeklyReport = (params?: {
+  owner?: string
+  owner_email?: string
+  anchor_date?: string
+  include_statuses?: string[]
+}) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.DEVELOPER_WEEKLY_REPORT),
+    method: 'get',
+    params
+  })
+}
+
+export const getDeveloperWeeklyCards = (params?: {
+  anchor_date?: string
+  limit?: number
+  include_statuses?: string[]
+}) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.DEVELOPER_WEEKLY_CARDS),
+    method: 'get',
+    params
+  })
+}
+
 // 配置信息
 export const getConfig = () => {
   return request({

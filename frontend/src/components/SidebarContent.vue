@@ -78,6 +78,7 @@ import {
   ScrollText,
   FolderKanban,
   BarChart3,
+  CalendarRange,
 } from 'lucide-vue-next'
 import reviewLogo from '@/assets/icons/review-logo.webp'
 import Card from 'primevue/card'
@@ -100,6 +101,7 @@ const navItems: SidebarMenuItem[] = [
   { route: '/projects', label: '项目管理', iconComponent: FolderKanban },
   { route: '/reviews', label: '审查记录', iconComponent: FileText },
   { route: '/review-insights', label: '问题分析', iconComponent: BarChart3 },
+  { route: '/weekly-feedback-report', label: '团队周报', iconComponent: CalendarRange },
   { route: '/config', label: '配置管理', iconComponent: Settings },
   { route: '/logs', label: '日志监控', iconComponent: ScrollText },
 ]

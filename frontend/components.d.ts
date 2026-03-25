@@ -27,6 +27,7 @@ declare module 'vue' {
     PieChart: typeof import('./src/components/charts/PieChart.vue')['default']
     ProjectInfoTab: typeof import('./src/components/project/ProjectInfoTab.vue')['default']
     ProjectSidebar: typeof import('./src/components/project/ProjectSidebar.vue')['default']
+    PublicReportShell: typeof import('./src/components/reports/PublicReportShell.vue')['default']
     RecentEventsTab: typeof import('./src/components/project/RecentEventsTab.vue')['default']
     ReviewSnippetConfigTab: typeof import('./src/components/config/ReviewSnippetConfigTab.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
@@ -35,5 +36,6 @@ declare module 'vue' {
     SimpleModal: typeof import('./src/components/ui/SimpleModal.vue')['default']
     WebhookEventRulesTab: typeof import('./src/components/config/WebhookEventRulesTab.vue')['default']
     WebhookEventTab: typeof import('./src/components/project/WebhookEventTab.vue')['default']
+    WeeklySnapshotSchedulerConfigTab: typeof import('./src/components/config/WeeklySnapshotSchedulerConfigTab.vue')['default']
   }
 }

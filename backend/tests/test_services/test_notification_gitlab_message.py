@@ -20,6 +20,7 @@ def test_gitlab_comment_message_renders_structured_issue_list() -> None:
         "highlights": ["结构清晰", "日志增强"],
         "issues": [
             {
+                "issue_id": "I-42",
                 "severity": "high",
                 "category": "reliability",
                 "file": "src/main/java/Foo.java",
@@ -37,7 +38,7 @@ def test_gitlab_comment_message_renders_structured_issue_list() -> None:
     assert "### 📝 审查摘要" in message
     assert "### ✅ 亮点" in message
     assert "### ❗ 问题列表（1）" in message
-    assert "1. 🔴 高危 **[reliability]** `src/main/java/Foo.java:42`" in message
+    assert "1. `I-42` 🔴 高危 **[reliability]** `src/main/java/Foo.java:42`" in message
     assert "问题: 可能出现空指针异常" in message
     assert "建议: 增加非空判断<br>并补充单测" in message
     assert "代码行:" in message
@@ -61,6 +62,7 @@ def test_gitlab_comment_message_handles_missing_issue_fields() -> None:
     )
 
     assert "问题列表（1）" in message
+    assert "1. `I-1`" in message
     assert "`unknown`" in message
     assert "问题: 描述" in message
 

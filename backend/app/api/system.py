@@ -154,6 +154,38 @@ async def test_webhook(
     return {"code": 202, "message": "Test webhook queued", "task_id": task_id}
 
 
+@router.post("/system/reports/developers/weekly/generate-last-week")
+async def enqueue_last_week_developer_summary_generation(
+    request: Request,
+    body: dict[str, Any] = Body(default_factory=dict),
+    request_id: str | None = Depends(get_request_id),
+) -> dict[str, Any]:
+    queue_manager = getattr(request.app.state, "queue_manager", None)
+    if queue_manager is None:
+        raise HTTPException(status_code=503, detail="Queue manager is not available.")
+
+    include_statuses_raw = body.get("include_statuses")
+    include_statuses = (
+        [str(item).strip() for item in include_statuses_raw if str(item).strip()]
+        if isinstance(include_statuses_raw, list)
+        else None
+    )
+    payload = TaskPayload(
+        task_type="generate_developer_weekly_snapshot",
+        data={
+            "reference_date": body.get("reference_date"),
+            "include_statuses": include_statuses,
+            "use_llm": bool(body.get("use_llm", True)),
+        },
+        priority=TaskPriority.low,
+        max_retries=1,
+    )
+    task_id = await queue_manager.enqueue(payload)
+    logger = get_logger(__name__, request_id)
+    logger.info("developer_weekly_snapshot_enqueued", task_id=task_id)
+    return {"code": 202, "message": "Weekly developer summary generation queued", "task_id": task_id}
+
+
 async def get_config_value(db: AsyncSession, key: str, default: str = "") -> str:
     row = (
         await db.execute(select(SystemConfig).where(SystemConfig.key == key).limit(1))

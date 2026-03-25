@@ -55,6 +55,16 @@
           />
         </TabPanel>
 
+        <TabPanel value="weekly-snapshot">
+          <WeeklySnapshotSchedulerConfigTab
+            v-model:config="config.system.weeklySnapshotScheduler"
+            :saving="savingWeeklySnapshotConfig"
+            :dirty="isWeeklySnapshotConfigDirty"
+            @save="handleWeeklySnapshotConfigSave"
+            @reset="handleWeeklySnapshotConfigReset"
+          />
+        </TabPanel>
+
         <TabPanel value="webhook-events">
           <WebhookEventRulesTab
             :rules="webhookEventRules"
@@ -93,6 +103,7 @@ import WebhookEventRulesTab from '@/components/config/WebhookEventRulesTab.vue'
 import NotificationChannelsTab from '@/components/config/NotificationChannelsTab.vue'
 import AuthUsersTab from '@/components/config/AuthUsersTab.vue'
 import ReviewSnippetConfigTab from '@/components/config/ReviewSnippetConfigTab.vue'
+import WeeklySnapshotSchedulerConfigTab, { type WeeklySnapshotSchedulerForm } from '@/components/config/WeeklySnapshotSchedulerConfigTab.vue'
 import IconButton from '@/components/ui/IconButton.vue'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
@@ -105,19 +116,32 @@ const tabs = [
   { key: 'gitlab', label: 'GitLab 配置' },
   { key: 'llm-providers', label: 'LLM 供应商' },
   { key: 'review-snippet', label: '问题代码' },
+  { key: 'weekly-snapshot', label: '周报调度' },
   { key: 'webhook-events', label: 'Webhook 事件' },
   { key: 'notification', label: '通知配置' },
   { key: 'auth-users', label: '账号管理' },
 ]
 const saving = ref(false)
 const savingSystemConfig = ref(false)
+const savingWeeklySnapshotConfig = ref(false)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
+
+const defaultWeeklySnapshotSchedulerConfig = (): WeeklySnapshotSchedulerForm => ({
+  enabled: false,
+  triggerWeekday: 0,
+  triggerHour: 1,
+  pollSeconds: 300,
+  useLlm: true,
+})
 
 const config = ref({
   llm: { provider: 'openai', model: 'gpt-4', apiKey: '', apiBase: '' },
   gitlab: { serverUrl: 'https://gitlab.com', privateToken: '', siteUrl: '' },
-  system: { reviewCodeSnippetSource: 'line' as 'line' | 'llm' },
+  system: {
+    reviewCodeSnippetSource: 'line' as 'line' | 'llm',
+    weeklySnapshotScheduler: defaultWeeklySnapshotSchedulerConfig(),
+  },
 })
 
 const channels = ref<any[]>([])
@@ -129,10 +153,41 @@ const normalizeReviewCodeSnippetSource = (value: unknown): 'line' | 'llm' => {
   return normalized === 'llm' ? 'llm' : 'line'
 }
 
+const parseBooleanConfigValue = (value: unknown, fallback: boolean): boolean => {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  return fallback
+}
+
+const parseIntConfigValue = (value: unknown, fallback: number, min: number, max: number): number => {
+  const parsed = Number.parseInt(String(value ?? '').trim(), 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
 const isSystemConfigDirty = computed(() => {
   const original = JSON.parse(JSON.stringify(originalConfig.value || {}))
   const originalSource = normalizeReviewCodeSnippetSource(original?.system?.reviewCodeSnippetSource)
   return config.value.system.reviewCodeSnippetSource !== originalSource
+})
+
+const normalizeWeeklySnapshotScheduler = (value: unknown): WeeklySnapshotSchedulerForm => {
+  const raw = (value ?? {}) as Partial<WeeklySnapshotSchedulerForm>
+  return {
+    enabled: Boolean(raw.enabled),
+    triggerWeekday: parseIntConfigValue(raw.triggerWeekday, 0, 0, 6),
+    triggerHour: parseIntConfigValue(raw.triggerHour, 1, 0, 23),
+    pollSeconds: parseIntConfigValue(raw.pollSeconds, 300, 5, 3600),
+    useLlm: raw.useLlm === undefined ? true : Boolean(raw.useLlm),
+  }
+}
+
+const isWeeklySnapshotConfigDirty = computed(() => {
+  const original = JSON.parse(JSON.stringify(originalConfig.value || {}))
+  const current = normalizeWeeklySnapshotScheduler(config.value.system.weeklySnapshotScheduler)
+  const baseline = normalizeWeeklySnapshotScheduler(original?.system?.weeklySnapshotScheduler)
+  return JSON.stringify(current) !== JSON.stringify(baseline)
 })
 
 const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
@@ -209,10 +264,44 @@ const loadConfig = async () => {
 
     const systemConfigList = await getSystemConfigs()
     if (Array.isArray(systemConfigList)) {
+      const systemConfigMap = new Map<string, string>()
+      for (const item of systemConfigList) {
+        const key = String(item?.key || '').trim()
+        if (!key) continue
+        systemConfigMap.set(key, String(item?.value ?? ''))
+      }
       const sourceConfig = systemConfigList.find(
         (item: any) => String(item?.key || '') === 'review.code_snippet_source'
       )
       config.value.system.reviewCodeSnippetSource = normalizeReviewCodeSnippetSource(sourceConfig?.value)
+      config.value.system.weeklySnapshotScheduler = {
+        enabled: parseBooleanConfigValue(
+          systemConfigMap.get('reports.developer_weekly.auto_enabled'),
+          false
+        ),
+        triggerWeekday: parseIntConfigValue(
+          systemConfigMap.get('reports.developer_weekly.auto_trigger_weekday'),
+          0,
+          0,
+          6
+        ),
+        triggerHour: parseIntConfigValue(
+          systemConfigMap.get('reports.developer_weekly.auto_trigger_hour'),
+          1,
+          0,
+          23
+        ),
+        pollSeconds: parseIntConfigValue(
+          systemConfigMap.get('reports.developer_weekly.auto_poll_seconds'),
+          300,
+          5,
+          3600
+        ),
+        useLlm: parseBooleanConfigValue(
+          systemConfigMap.get('reports.developer_weekly.auto_use_llm'),
+          true
+        ),
+      }
     }
 
     originalConfig.value = JSON.parse(JSON.stringify(config.value))
@@ -278,6 +367,38 @@ const handleSystemConfigReset = () => {
     original?.system?.reviewCodeSnippetSource
   )
   showMessage('问题代码配置已重置')
+}
+
+const handleWeeklySnapshotConfigSave = async () => {
+  savingWeeklySnapshotConfig.value = true
+  try {
+    const schedulerConfig = normalizeWeeklySnapshotScheduler(config.value.system.weeklySnapshotScheduler)
+    await updateSystemConfigs({
+      configs: {
+        'reports.developer_weekly.auto_enabled': String(schedulerConfig.enabled),
+        'reports.developer_weekly.auto_trigger_weekday': String(schedulerConfig.triggerWeekday),
+        'reports.developer_weekly.auto_trigger_hour': String(schedulerConfig.triggerHour),
+        'reports.developer_weekly.auto_poll_seconds': String(schedulerConfig.pollSeconds),
+        'reports.developer_weekly.auto_use_llm': String(schedulerConfig.useLlm),
+      },
+    })
+    showMessage('周报调度配置保存成功')
+    originalConfig.value = JSON.parse(JSON.stringify(config.value))
+  } catch (error) {
+    console.error('Failed to save weekly snapshot scheduler config:', error)
+    showMessage('保存周报调度配置失败', 'error')
+  } finally {
+    savingWeeklySnapshotConfig.value = false
+  }
+}
+
+const handleWeeklySnapshotConfigReset = () => {
+  if (!JSON.stringify(originalConfig.value)) return
+  const original = JSON.parse(JSON.stringify(originalConfig.value))
+  config.value.system.weeklySnapshotScheduler = normalizeWeeklySnapshotScheduler(
+    original?.system?.weeklySnapshotScheduler
+  )
+  showMessage('周报调度配置已重置')
 }
 
 onMounted(() => loadConfig())

@@ -201,6 +201,12 @@ async def initialize_default_webhook_event_rules(
             "description": "Triggered on push event",
             "match_rules": {},
         },
+        {
+            "name": "MR Feedback Command",
+            "event_type": "Note Hook",
+            "description": "Triggered when maintainers reply command in MR discussion",
+            "match_rules": {"object_kind": "note", "object_attributes": {"noteable_type": "MergeRequest"}},
+        },
     ]
 
     created = 0

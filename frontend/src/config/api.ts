@@ -37,6 +37,9 @@ export const API_ENDPOINTS = {
   REVIEW_FINDINGS: (id: string | number) => `/webhook/reviews/${id}/findings/`,
   REVIEW_FINDING_ACTIONS: (id: string | number) => `/webhook/review-findings/${id}/actions/`,
   REVIEW_FINDINGS_STATS: '/webhook/review-findings/stats/',
+  MR_FEEDBACK_WEEKLY_REPORT: '/webhook/reports/mr-feedback/weekly/',
+  DEVELOPER_WEEKLY_REPORT: '/webhook/reports/developers/weekly/',
+  DEVELOPER_WEEKLY_CARDS: '/webhook/reports/developers/weekly/cards/',
 
   // 配置管理
   CONFIG: '/config/',

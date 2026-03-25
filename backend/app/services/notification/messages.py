@@ -67,6 +67,14 @@ def issue_code_snippet(issue: dict[str, Any]) -> str:
     return ""
 
 
+def issue_identifier(issue: dict[str, Any], index: int) -> str:
+    for key in ("issue_id", "id", "fingerprint"):
+        raw = str(issue.get(key) or "").strip()
+        if raw:
+            return raw[:64]
+    return f"I-{index}"
+
+
 def build_gitlab_comment_message(
     report_data: dict[str, Any],
     mr_info: dict[str, Any],
@@ -117,13 +125,14 @@ def build_gitlab_comment_message(
         ])
         for idx, raw_issue in enumerate(issues, 1):
             issue = raw_issue if isinstance(raw_issue, dict) else {}
+            issue_id = issue_identifier(issue, idx)
             severity = issue_severity_label(str(issue.get("severity") or "medium"))
             category = str(issue.get("category") or "general").strip()
             location = issue_location(issue)
             description = normalize_multiline(str(issue.get("description") or ""))
             suggestion = normalize_multiline(str(issue.get("suggestion") or ""))
 
-            lines.append(f"{idx}. {severity} **[{category}]** `{location}`")
+            lines.append(f"{idx}. `{issue_id}` {severity} **[{category}]** `{location}`")
             if description:
                 lines.append(f"   - 问题: {description}")
             if suggestion:

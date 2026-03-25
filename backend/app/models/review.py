@@ -85,6 +85,7 @@ class ReviewFinding(Base):
         sa.ForeignKey("merge_request_reviews.id", ondelete="CASCADE"),
         index=True,
     )
+    issue_id: Mapped[str] = mapped_column(sa.String(64), default="", server_default="", index=True)
     fingerprint: Mapped[str] = mapped_column(sa.String(64), index=True)
     category: Mapped[str] = mapped_column(sa.String(100), default="quality", server_default="quality")
     subcategory: Mapped[str] = mapped_column(sa.String(100), default="", server_default="")

@@ -16,6 +16,7 @@ from app.llm import llm_router
 from app.llm.types import LLMRequest
 from app.models import (
     LLMProvider,
+    MRFeedbackRecord,
     MergeRequestReview,
     Project,
     ProjectWebhookEventPrompt,
@@ -24,8 +25,10 @@ from app.models import (
     WebhookLog,
 )
 from app.services.gitlab import GitLabService
+from app.services.mr_feedback import CommandParseError, parse_mr_feedback_command
 from app.services.notification import NotificationDispatcher
 from app.services.report import ReportGenerator
+from app.services.reporting import generate_last_week_developer_weekly_summaries
 from app.services.repository import RepositoryManager
 from app.services.review import ReviewResultParser, ReviewService
 from app.services.review_structured import (
@@ -40,6 +43,7 @@ _TASK_REGISTRY: dict[str, TaskHandler] = {}
 _TRACE_PREVIEW_LIMIT = 8000
 _REVIEW_CODE_SNIPPET_SOURCE_KEY = "review.code_snippet_source"
 _ALLOWED_REVIEW_CODE_SNIPPET_SOURCES = {"line", "llm"}
+_MAINTAINER_ACCESS_LEVEL = 40
 
 
 def register_task(task_type: str) -> Callable[[TaskHandler], TaskHandler]:
@@ -95,6 +99,16 @@ def _resolve_max_tokens(value: Any, default: int = 20480) -> int:
     if parsed <= 0:
         return default
     return parsed
+
+
+def _parse_iso_date(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 async def _resolve_review_code_snippet_source(
@@ -228,6 +242,171 @@ async def _resolve_custom_prompt(
     return rendered or None
 
 
+def _is_note_hook_event(event_type: str, payload: dict[str, Any]) -> bool:
+    if event_type == "Note Hook":
+        return True
+    return str(payload.get("object_kind") or "").strip().lower() == "note"
+
+
+async def _handle_note_feedback(
+    *,
+    db: AsyncSession,
+    project: Project,
+    webhook_log: WebhookLog | None,
+    attrs: dict[str, Any],
+    user: dict[str, Any],
+    gitlab_service: GitLabService,
+    tracer: PipelineTracer,
+) -> dict[str, Any]:
+    mr_iid = _as_int(attrs.get("noteable_iid")) or _as_int(attrs.get("iid"))
+    if mr_iid is None and webhook_log is not None:
+        mr_iid = webhook_log.merge_request_iid
+    if mr_iid is None:
+        tracer.step("feedback_note_skipped", status="warning", reason="missing_mr_iid")
+        return {"status": "skipped", "reason": "missing_mr_iid", "mode": "note_feedback"}
+
+    note_text = str(attrs.get("note") or "").strip()
+    if not note_text:
+        tracer.step("feedback_note_skipped", status="warning", reason="empty_note")
+        return {"status": "skipped", "reason": "empty_note", "mode": "note_feedback"}
+
+    try:
+        parsed = parse_mr_feedback_command(note_text)
+    except CommandParseError as exc:
+        await gitlab_service.post_merge_request_comment(
+            project_id=project.project_id,
+            mr_iid=mr_iid,
+            comment=(
+                f"⚠️ 回收命令格式错误：{exc}\n\n"
+                "可用命令：\n"
+                "- `/cra ignore <issue_id> reason: <原因>`\n"
+                "- `/cra reopen <issue_id> reason: <原因>`\n"
+                "- `/cra help`"
+            ),
+        )
+        tracer.step(
+            "feedback_command_invalid",
+            status="warning",
+            mr_iid=mr_iid,
+            error=str(exc),
+        )
+        return {"status": "skipped", "reason": "invalid_command", "mode": "note_feedback"}
+
+    if parsed is None:
+        tracer.step("feedback_note_skipped", status="warning", reason="non_command")
+        return {"status": "skipped", "reason": "note_without_command", "mode": "note_feedback"}
+
+    if parsed.action == "help":
+        await gitlab_service.post_merge_request_comment(
+            project_id=project.project_id,
+            mr_iid=mr_iid,
+            comment=(
+                "📌 回收命令帮助\n"
+                "- `/cra ignore <issue_id> reason: <原因>`\n"
+                "- `/cra reopen <issue_id> reason: <原因>`\n"
+                "- `/cra help`"
+            ),
+        )
+        tracer.step("feedback_command_help", mr_iid=mr_iid)
+        return {"status": "completed", "mode": "note_feedback", "action": "help"}
+
+    user_id = _as_int(user.get("id"))
+    user_name = str(user.get("name") or "unknown")
+    access_level = (
+        await gitlab_service.get_project_member_access_level(project_id=project.project_id, user_id=user_id)
+        if user_id is not None
+        else None
+    )
+    tracer.step(
+        "feedback_operator_checked",
+        mr_iid=mr_iid,
+        user_id=user_id,
+        access_level=access_level,
+    )
+    if access_level is None or access_level < _MAINTAINER_ACCESS_LEVEL:
+        await gitlab_service.post_merge_request_comment(
+            project_id=project.project_id,
+            mr_iid=mr_iid,
+            comment="⚠️ 仅 Maintainer/Owner 可以执行回收命令。",
+        )
+        tracer.step(
+            "feedback_permission_denied",
+            status="warning",
+            mr_iid=mr_iid,
+            user_id=user_id,
+            access_level=access_level,
+        )
+        return {"status": "skipped", "reason": "insufficient_permission", "mode": "note_feedback"}
+
+    await gitlab_service.post_merge_request_comment(
+        project_id=project.project_id,
+        mr_iid=mr_iid,
+        comment=(
+            f"✅ 已回收 `{parsed.action}` 指令\n"
+            f"- issue: `{parsed.issue_id}`\n"
+            f"- reason: {parsed.reason}\n"
+            f"- operator: {user_name}\n\n"
+            "该回收动作已入库，并会进入团队周报统计。"
+        ),
+    )
+    operator_role = "owner" if access_level is not None and access_level >= 50 else "maintainer"
+    record = MRFeedbackRecord(
+        project_id=project.project_id,
+        merge_request_iid=mr_iid,
+        review_id=None,
+        issue_id=str(parsed.issue_id or "").strip()[:64] or "unknown",
+        rule_key=None,
+        action=parsed.action,
+        reason=str(parsed.reason or "").strip(),
+        operator_gitlab_id=user_id if user_id is not None else 0,
+        operator_name=user_name[:255],
+        operator_role=operator_role,
+        source_note_id=_as_int(attrs.get("id")),
+        source_note_body=note_text,
+    )
+    db.add(record)
+    await db.flush()
+    tracer.step(
+        "feedback_command_accepted",
+        mr_iid=mr_iid,
+        user_id=user_id,
+        action=parsed.action,
+        issue_id=parsed.issue_id,
+        feedback_record_id=record.id,
+    )
+    return {
+        "status": "completed",
+        "mode": "note_feedback",
+        "action": parsed.action,
+        "issue_id": parsed.issue_id,
+        "feedback_record_id": record.id,
+    }
+
+
+@register_task("generate_developer_weekly_snapshot")
+async def generate_developer_weekly_snapshot(data: dict[str, Any]) -> dict[str, Any]:
+    include_statuses_raw = data.get("include_statuses")
+    include_statuses = (
+        [str(item).strip() for item in include_statuses_raw if str(item).strip()]
+        if isinstance(include_statuses_raw, list)
+        else None
+    )
+    use_llm = bool(data.get("use_llm", True))
+    reference_date_raw = _parse_iso_date(data.get("reference_date"))
+    reference_date = reference_date_raw.date() if reference_date_raw is not None else None
+
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        result = await generate_last_week_developer_weekly_summaries(
+            db,
+            reference_date=reference_date,
+            include_statuses=include_statuses,
+            use_llm=use_llm,
+        )
+        await db.commit()
+        return {"status": "completed", **result}
+
+
 @register_task("review_mr")
 async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
     settings = get_settings()
@@ -340,6 +519,35 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
             attrs = attrs if isinstance(attrs, dict) else {}
             user = payload.get("user")
             user = user if isinstance(user, dict) else {}
+            gitlab_service = GitLabService(db=db, request_id=request_id)
+
+            if _is_note_hook_event(event_type, payload):
+                note_result = await _handle_note_feedback(
+                    db=db,
+                    project=project,
+                    webhook_log=webhook_log,
+                    attrs=attrs,
+                    user=user,
+                    gitlab_service=gitlab_service,
+                    tracer=tracer,
+                )
+                if webhook_log is not None:
+                    webhook_log.pipeline_trace = tracer.to_dict()
+                    webhook_log.processed = True
+                    webhook_log.processed_at = datetime.now(UTC).replace(tzinfo=None)
+                    if note_result.get("status") == "completed":
+                        webhook_log.log_level = "INFO"
+                        webhook_log.skip_reason = None
+                    else:
+                        webhook_log.log_level = "WARNING"
+                        webhook_log.skip_reason = str(note_result.get("reason") or "note_feedback_skipped")
+                    webhook_log.error_message = None
+                await db.commit()
+                return {
+                    **note_result,
+                    "project_id": project.project_id,
+                    "webhook_log_id": tracked_webhook_log_id,
+                }
 
             mr_iid = _as_int(attrs.get("iid"))
             if mr_iid is None and webhook_log is not None:
@@ -390,7 +598,6 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 "provider_resolved",
                 provider=provider.name, protocol=provider.protocol,
             )
-            gitlab_service = GitLabService(db=db, request_id=request_id)
             review_service = ReviewService(request_id=request_id)
             report_generator = ReportGenerator(request_id=request_id)
             notifier = NotificationDispatcher(request_id=request_id)
