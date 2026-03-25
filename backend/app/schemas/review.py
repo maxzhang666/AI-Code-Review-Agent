@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+REVIEW_FINDING_BATCH_MAX_IDS = 500
+
 
 class MergeRequestReviewResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -128,7 +130,7 @@ class ReviewFindingWorkbenchListResponse(BaseModel):
 
 
 class ReviewFindingBatchActionCreate(BaseModel):
-    finding_ids: list[int] = Field(min_length=1)
+    finding_ids: list[int] = Field(min_length=1, max_length=REVIEW_FINDING_BATCH_MAX_IDS)
     action_type: str = Field(pattern="^(fixed|ignored|todo|reopened)$")
     actor: str = Field(min_length=1, max_length=255)
     note: str = ""

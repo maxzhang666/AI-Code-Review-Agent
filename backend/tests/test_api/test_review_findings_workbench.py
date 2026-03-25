@@ -249,3 +249,84 @@ async def test_workbench_batch_actions_returns_success_and_failed_counts(client,
     ids = {item["id"] for item in check.json()["results"]}
     assert finding1.id in ids
     assert finding2.id in ids
+
+
+@pytest.mark.asyncio
+async def test_workbench_list_rejects_invalid_action_statuses(client) -> None:
+    response = await client.get(
+        "/api/webhook/review-findings/",
+        params={"action_statuses": ["fixed", "invalid-status"]},
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    detail = str(payload.get("detail") or payload.get("message") or payload)
+    assert "action_statuses" in detail
+    assert "invalid-status" in detail
+    assert "unprocessed" in detail
+    assert "fixed" in detail
+    assert "todo" in detail
+    assert "ignored" in detail
+    assert "reopened" in detail
+
+
+@pytest.mark.asyncio
+async def test_workbench_batch_actions_rejects_too_many_finding_ids(client) -> None:
+    response = await client.post(
+        "/api/webhook/review-findings/actions/batch/",
+        json={
+            "finding_ids": list(range(1, 503)),
+            "action_type": "todo",
+            "actor": "triager",
+            "note": "bulk action",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_workbench_list_uses_newest_action_as_latest_status(client, db_session) -> None:
+    base_time = datetime(2026, 3, 20, 9, 0, 0)
+    review = await _create_review(
+        db_session,
+        project_id=9200,
+        status="completed",
+        author_name="Latest Action Tester",
+        author_email="latest@example.com",
+    )
+    finding = await _create_finding(
+        db_session,
+        review_id=review.id,
+        severity="high",
+        message="latest-action-ordering",
+        created_at=base_time,
+    )
+    await _create_action(
+        db_session,
+        finding_id=finding.id,
+        action_type="todo",
+        actor="alice",
+        action_at=base_time + timedelta(minutes=1),
+        note="older action",
+    )
+    await _create_action(
+        db_session,
+        finding_id=finding.id,
+        action_type="fixed",
+        actor="bob",
+        action_at=base_time + timedelta(minutes=2),
+        note="newer action",
+    )
+
+    response = await client.get(
+        "/api/webhook/review-findings/",
+        params={"project_id": 9200},
+    )
+
+    assert response.status_code == 200
+    result = next(item for item in response.json()["results"] if item["id"] == finding.id)
+    assert result["action_status"] == "fixed"
+    assert result["latest_action"]["action_type"] == "fixed"
+    assert result["latest_action"]["actor"] == "bob"
+    assert result["latest_action"]["note"] == "newer action"

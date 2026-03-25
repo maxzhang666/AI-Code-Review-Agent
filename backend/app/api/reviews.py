@@ -27,6 +27,8 @@ from app.services.review_structured import materialize_review_findings_from_lega
 
 router = APIRouter()
 
+ALLOWED_ACTION_STATUSES = ("unprocessed", "fixed", "todo", "ignored", "reopened")
+
 
 def _to_bucket_rows(rows: list[tuple[Any, Any]]) -> list[ReviewStatsBucket]:
     result: list[ReviewStatsBucket] = []
@@ -370,6 +372,16 @@ async def list_review_findings_workbench(
         base = base.where(ReviewFinding.created_at <= end_at)
     if action_statuses:
         normalized_action_statuses = [item.strip().lower() for item in action_statuses if item and item.strip()]
+        invalid_statuses = sorted({item for item in normalized_action_statuses if item not in ALLOWED_ACTION_STATUSES})
+        if invalid_statuses:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Invalid action_statuses: "
+                    f"{', '.join(invalid_statuses)}. "
+                    f"Allowed values: {', '.join(ALLOWED_ACTION_STATUSES)}."
+                ),
+            )
         action_types = [item for item in normalized_action_statuses if item in {"fixed", "ignored", "todo", "reopened"}]
         include_unprocessed = "unprocessed" in normalized_action_statuses
         status_filters = []
