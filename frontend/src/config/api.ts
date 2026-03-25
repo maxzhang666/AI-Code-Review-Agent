@@ -55,6 +55,8 @@ export const API_ENDPOINTS = {
 
   // 系统信息
   SYSTEM_INFO: '/system/info',
+  SYSTEM_LOG_FILES: '/system/log-files/',
+  SYSTEM_LOG_FILE_CONTENT: '/system/log-files/content/',
 
   // 仪表盘
   DASHBOARD_STATS: '/webhook/dashboard/stats/',

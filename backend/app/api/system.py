@@ -4,7 +4,9 @@ import os
 import platform
 import sys
 import time
-from datetime import datetime
+from collections import deque
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import psutil
@@ -14,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from zoneinfo import ZoneInfo
 
 from app.config import get_settings
-from app.core.deps import get_db, get_request_id
+from app.core.deps import get_current_settings, get_db, get_request_id
 from app.core.logging import get_logger
 from app.models import (
     LLMProvider,
@@ -73,6 +75,19 @@ def _detect_database_type(database_url: str | None) -> str:
     return "unknown"
 
 
+def _resolve_log_dir(log_dir: str) -> Path:
+    return Path(log_dir).expanduser().resolve()
+
+
+def _resolve_log_file_path(log_dir: Path, filename: str) -> Path:
+    candidate = (log_dir / filename).resolve()
+    try:
+        candidate.relative_to(log_dir)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid filename.") from exc
+    return candidate
+
+
 @router.get("/system/info")
 async def get_system_info(
     request_id: str | None = Depends(get_request_id),
@@ -125,6 +140,67 @@ async def get_statistics(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
         "webhook_event_rules": rules_count,
         "llm_providers": providers_count,
         "tasks_by_status": tasks_by_status,
+    }
+
+
+@router.get("/system/log-files/")
+async def list_system_log_files(
+    settings=Depends(get_current_settings),
+) -> dict[str, Any]:
+    log_dir = _resolve_log_dir(settings.LOG_DIR)
+    if not log_dir.exists() or not log_dir.is_dir():
+        return {"count": 0, "results": []}
+
+    files: list[dict[str, Any]] = []
+    for file_path in log_dir.iterdir():
+        if not file_path.is_file():
+            continue
+        stat = file_path.stat()
+        files.append(
+            {
+                "name": file_path.name,
+                "size_bytes": stat.st_size,
+                "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(timespec="seconds"),
+            }
+        )
+    files.sort(key=lambda item: item["modified_at"], reverse=True)
+    return {"count": len(files), "results": files}
+
+
+@router.get("/system/log-files/content/")
+async def get_system_log_file_content(
+    filename: str,
+    lines: int = 300,
+    settings=Depends(get_current_settings),
+) -> dict[str, Any]:
+    if not filename.strip():
+        raise HTTPException(status_code=400, detail="Filename is required.")
+    if lines < 1 or lines > 5000:
+        raise HTTPException(status_code=400, detail="lines must be between 1 and 5000.")
+
+    log_dir = _resolve_log_dir(settings.LOG_DIR)
+    if not log_dir.exists() or not log_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Log directory not found.")
+
+    file_path = _resolve_log_file_path(log_dir, filename)
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Log file not found.")
+
+    buffer: deque[str] = deque(maxlen=lines)
+    total_lines = 0
+    with file_path.open("r", encoding="utf-8", errors="replace") as fp:
+        for line in fp:
+            total_lines += 1
+            buffer.append(line)
+
+    content = "".join(reversed(buffer))
+    returned_lines = len(buffer)
+    return {
+        "file": file_path.name,
+        "total_lines": total_lines,
+        "returned_lines": returned_lines,
+        "truncated": total_lines > returned_lines,
+        "content": content,
     }
 
 

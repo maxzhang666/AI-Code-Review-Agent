@@ -84,6 +84,7 @@ import {
   FileText,
   Settings,
   ScrollText,
+  FileSearch,
   FolderKanban,
   BarChart3,
   CalendarRange,
@@ -132,6 +133,7 @@ const groupedNavItems: SidebarMenuGroup[] = [
     items: [
       { route: '/config', label: '配置管理', iconComponent: Settings },
       { route: '/logs', label: '日志监控', iconComponent: ScrollText },
+      { route: '/system-logs', label: '系统日志', iconComponent: FileSearch },
     ],
   },
 ]

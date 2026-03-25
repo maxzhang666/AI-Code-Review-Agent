@@ -258,6 +258,23 @@ export const getLogs = (params?: any) => {
   })
 }
 
+// 系统日志文件列表
+export const getSystemLogFiles = () => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_LOG_FILES),
+    method: 'get',
+  })
+}
+
+// 系统日志文件内容
+export const getSystemLogFileContent = (filename: string, lines: number = 300) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_LOG_FILE_CONTENT),
+    method: 'get',
+    params: { filename, lines },
+  })
+}
+
 // 系统信息
 export const getSystemInfo = () => {
   return request({
