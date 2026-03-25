@@ -40,7 +40,6 @@ export default defineConfig(({ mode }) => {
             if (!id.includes('node_modules')) return
             if (id.includes('/zrender/')) return 'vendor-zrender'
             if (id.includes('/echarts/')) return 'vendor-echarts'
-            if (id.includes('/primevue/')) return 'vendor-primevue'
             if (id.includes('/@primeuix/')) return 'vendor-prime-theme'
             if (id.includes('/primeicons/')) return 'vendor-prime-icons'
             if (id.includes('lucide-vue-next')) return 'vendor-lucide'
