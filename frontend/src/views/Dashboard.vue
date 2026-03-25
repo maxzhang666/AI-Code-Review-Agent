@@ -245,7 +245,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
 import Tooltip from 'primevue/tooltip'
 import {
@@ -254,6 +253,7 @@ import {
   User, GitBranch, Star, Cpu, ExternalLink
 } from 'lucide-vue-next'
 import { tooltipStyle, gridStyle, categoryAxisStyle, valueAxisStyle, legendStyle } from '@/utils/echartsTheme'
+import { graphic } from '@/lib/echarts'
 import LineChart from '@/components/charts/LineChart.vue'
 import PieChart from '@/components/charts/PieChart.vue'
 import BarChart from '@/components/charts/BarChart.vue'
@@ -408,7 +408,7 @@ const lineChartOption = computed<EChartsOption>(() => {
         lineStyle: { color: '#007aff', width: 3 },
         itemStyle: { color: '#007aff' },
         areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          color: new graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: 'rgba(0, 122, 255, 0.2)' },
             { offset: 1, color: 'rgba(0, 122, 255, 0)' }
           ])
@@ -420,7 +420,7 @@ const lineChartOption = computed<EChartsOption>(() => {
         lineStyle: { color: '#34c759', width: 3 },
         itemStyle: { color: '#34c759' },
         areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          color: new graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: 'rgba(52, 199, 89, 0.2)' },
             { offset: 1, color: 'rgba(52, 199, 89, 0)' }
           ])

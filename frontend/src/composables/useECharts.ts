@@ -1,9 +1,10 @@
 import { onBeforeUnmount, type Ref, type ShallowRef, shallowRef } from 'vue'
-import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
+import type { EChartsType } from 'echarts/core'
+import { echarts } from '@/lib/echarts'
 
 export function useECharts(chartRef: Ref<HTMLElement | undefined>) {
-  const chart: ShallowRef<echarts.ECharts | null> = shallowRef(null)
+  const chart: ShallowRef<EChartsType | null> = shallowRef(null)
 
   const handleResize = () => chart.value?.resize()
 

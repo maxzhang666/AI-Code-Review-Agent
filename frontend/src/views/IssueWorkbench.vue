@@ -1,118 +1,152 @@
 <template>
-  <div class="space-y-6">
-    <Card>
+  <div class="mx-auto w-full max-w-[1800px] space-y-4">
+    <section
+      class="rounded-2xl border border-surface-200/70 bg-gradient-to-r from-surface-50 via-surface-0 to-primary-50/30 px-4 py-4 shadow-sm dark:border-surface-700/70 dark:from-surface-900/80 dark:via-surface-900 dark:to-primary-900/20"
+    >
+      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div class="space-y-0.5">
+          <h2 class="text-xl font-bold tracking-tight text-surface-900 dark:text-surface-0">Issue 工作台</h2>
+          <p class="text-xs text-surface-600 dark:text-surface-300">跨审查问题视图，支持筛选、批量状态更新与快速处理</p>
+        </div>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div class="rounded-xl border border-surface-200/70 bg-white/80 px-3 py-1.5 dark:border-surface-700/70 dark:bg-surface-900/70">
+            <p class="text-[11px] text-surface-500 dark:text-surface-400">总记录</p>
+            <p class="text-base font-semibold text-surface-900 dark:text-surface-0">{{ total }}</p>
+          </div>
+          <div class="rounded-xl border border-surface-200/70 bg-white/80 px-3 py-1.5 dark:border-surface-700/70 dark:bg-surface-900/70">
+            <p class="text-[11px] text-surface-500 dark:text-surface-400">当前页</p>
+            <p class="text-base font-semibold text-surface-900 dark:text-surface-0">{{ findings.length }}</p>
+          </div>
+          <div class="rounded-xl border border-surface-200/70 bg-white/80 px-3 py-1.5 dark:border-surface-700/70 dark:bg-surface-900/70">
+            <p class="text-[11px] text-surface-500 dark:text-surface-400">已选项</p>
+            <p class="text-base font-semibold text-surface-900 dark:text-surface-0">{{ selectedCount }}</p>
+          </div>
+          <div class="rounded-xl border border-surface-200/70 bg-white/80 px-3 py-1.5 dark:border-surface-700/70 dark:bg-surface-900/70">
+            <p class="text-[11px] text-surface-500 dark:text-surface-400">生效筛选</p>
+            <p class="text-base font-semibold text-surface-900 dark:text-surface-0">{{ activeFiltersCount }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <Card class="border border-surface-200/70 shadow-sm dark:border-surface-700/70">
       <template #content>
-        <div class="flex flex-col gap-4">
-          <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 class="text-2xl font-bold tracking-tight text-surface-900 dark:text-surface-0">Issue 工作台</h2>
-              <p class="text-sm text-surface-500 dark:text-surface-400">跨审查问题视图，支持筛选、批量状态更新与快速处理</p>
+        <div class="space-y-2.5">
+          <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="inline-flex items-center gap-2 text-xs font-medium text-surface-700 dark:text-surface-200">
+                <span class="inline-flex h-2 w-2 rounded-full bg-primary-500" />
+                查询筛选
+              </div>
+              <Tag
+                v-if="activeFiltersCount > 0"
+                severity="contrast"
+                class="text-[11px] dark:!bg-surface-700 dark:!text-surface-200"
+              >
+                已启用 {{ activeFiltersCount }} 项
+              </Tag>
             </div>
-            <div class="flex items-center gap-2">
-              <Button label="重置筛选" text size="small" :disabled="loading" @click="resetFilters" />
-              <Button label="查询" size="small" :loading="loading" @click="handleSearch" />
+            <div class="flex flex-wrap items-center gap-2">
+              <Button label="重置筛选" outlined size="small" :disabled="loading" @click="resetFilters" />
+              <Button label="查询 Issue" size="small" :loading="loading" @click="handleSearch" />
             </div>
           </div>
 
-          <div class="grid grid-cols-1 gap-3 lg:grid-cols-3 xl:grid-cols-4">
-            <label class="flex flex-col gap-1">
-              <span class="text-xs text-surface-500">项目</span>
-              <Select
-                v-model="selectedProjectId"
-                :options="projectOptions"
-                option-label="label"
-                option-value="value"
-                class="w-full"
-                placeholder="全部项目"
-              />
-            </label>
+          <div class="rounded-xl border border-surface-200/70 bg-surface-50/45 p-2.5 dark:border-surface-700/60 dark:bg-surface-800/25">
+            <div class="grid grid-cols-1 gap-2 md:grid-cols-2 xl:[grid-template-columns:1.2fr_0.85fr_0.9fr_0.9fr_1.35fr_1.1fr]">
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-surface-600 dark:text-surface-300">项目</span>
+                <Select
+                  v-model="selectedProjectId"
+                  :options="projectOptions"
+                  option-label="label"
+                  option-value="value"
+                  class="filter-control w-full"
+                  placeholder="全部项目"
+                />
+              </label>
 
-            <label class="flex flex-col gap-1">
-              <span class="text-xs text-surface-500">严重度</span>
-              <Select
-                v-model="selectedSeverity"
-                :options="severityOptions"
-                option-label="label"
-                option-value="value"
-                class="w-full"
-                placeholder="全部严重度"
-              />
-            </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-surface-600 dark:text-surface-300">严重度</span>
+                <Select
+                  v-model="selectedSeverity"
+                  :options="severityOptions"
+                  option-label="label"
+                  option-value="value"
+                  class="filter-control w-full"
+                  placeholder="全部严重度"
+                />
+              </label>
 
-            <label class="flex flex-col gap-1">
-              <span class="text-xs text-surface-500">审查状态</span>
-              <Select
-                v-model="selectedReviewStatus"
-                :options="reviewStatusOptions"
-                option-label="label"
-                option-value="value"
-                class="w-full"
-                placeholder="全部状态"
-              />
-            </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-surface-600 dark:text-surface-300">审查状态</span>
+                <Select
+                  v-model="selectedReviewStatus"
+                  :options="reviewStatusOptions"
+                  option-label="label"
+                  option-value="value"
+                  class="filter-control w-full"
+                  placeholder="全部状态"
+                />
+              </label>
 
-            <label class="flex flex-col gap-1">
-              <span class="text-xs text-surface-500">处理状态</span>
-              <Select
-                v-model="selectedActionStatus"
-                :options="actionStatusOptions"
-                option-label="label"
-                option-value="value"
-                class="w-full"
-                placeholder="全部处理状态"
-              />
-            </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-surface-600 dark:text-surface-300">处理状态</span>
+                <Select
+                  v-model="selectedActionStatus"
+                  :options="actionStatusOptions"
+                  option-label="label"
+                  option-value="value"
+                  class="filter-control w-full"
+                  placeholder="全部处理状态"
+                />
+              </label>
 
-            <label class="flex flex-col gap-1">
-              <span class="text-xs text-surface-500">开始时间</span>
-              <InputText v-model="startAt" type="datetime-local" class="w-full" />
-            </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-surface-600 dark:text-surface-300">时间范围</span>
+                <DatePicker
+                  v-model="selectedTimeRange"
+                  selectionMode="range"
+                  dateFormat="yy年mm月dd日"
+                  showIcon
+                  iconDisplay="input"
+                  class="filter-control w-full"
+                  placeholder="选择开始与结束日期"
+                />
+              </label>
 
-            <label class="flex flex-col gap-1">
-              <span class="text-xs text-surface-500">结束时间</span>
-              <InputText v-model="endAt" type="datetime-local" class="w-full" />
-            </label>
-
-            <label class="flex flex-col gap-1 xl:col-span-2">
-              <span class="text-xs text-surface-500">作者</span>
-              <InputText
-                v-model="author"
-                class="w-full"
-                placeholder="按作者姓名或邮箱匹配"
-                @keydown.enter="handleSearch"
-              />
-            </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-surface-600 dark:text-surface-300">作者</span>
+                <Select
+                  v-model="selectedAuthor"
+                  :options="authorOptions"
+                  option-label="label"
+                  option-value="value"
+                  class="filter-control w-full"
+                  placeholder="全部作者"
+                  filter
+                />
+              </label>
+            </div>
           </div>
         </div>
       </template>
     </Card>
 
-    <Card v-if="selectedCount > 0">
+    <Card class="border border-surface-200/70 shadow-sm dark:border-surface-700/70">
       <template #content>
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div class="space-y-2">
-            <div class="text-sm font-medium text-surface-800 dark:text-surface-100">已选择 {{ selectedCount }} 项（仅当前页）</div>
-            <div class="flex flex-wrap gap-2">
-              <Button size="small" severity="success" :loading="batchLoading" @click="submitBatchAction('fixed')">标记已修复</Button>
-              <Button size="small" severity="warn" :loading="batchLoading" @click="submitBatchAction('todo')">标记待处理</Button>
-              <Button size="small" severity="secondary" :loading="batchLoading" @click="submitBatchAction('ignored')">标记已忽略</Button>
-              <Button size="small" severity="info" :loading="batchLoading" @click="submitBatchAction('reopened')">标记重新打开</Button>
-            </div>
+        <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="text-sm font-medium text-surface-700 dark:text-surface-200">
+            Issue 列表
+            <span class="ml-2 text-xs font-normal text-surface-500 dark:text-surface-400">共 {{ total }} 条</span>
           </div>
-          <div class="grid w-full grid-cols-1 gap-2 lg:w-[460px]">
-            <InputText v-model="actionActor" placeholder="处理人（默认当前登录用户）" />
-            <Textarea v-model="actionNote" rows="2" placeholder="处理备注（可选）" />
-          </div>
+          <div class="text-xs text-surface-500 dark:text-surface-400">第 {{ currentPage }} / {{ totalPages }} 页</div>
         </div>
-      </template>
-    </Card>
 
-    <Card>
-      <template #content>
-        <div class="relative overflow-x-auto">
-          <table class="w-full min-w-[1280px] text-sm text-surface-800 dark:text-surface-100">
+        <div class="relative max-h-[74vh] overflow-auto rounded-xl border border-surface-200/70 dark:border-surface-700/70">
+          <table class="w-full min-w-[1440px] text-sm text-surface-800 dark:text-surface-100">
             <thead>
-              <tr class="border-b border-surface-200/70 text-left text-xs font-semibold uppercase tracking-wide text-surface-600 dark:border-surface-600/70 dark:bg-surface-800/40 dark:text-surface-200">
+              <tr class="sticky top-0 z-[1] border-b border-surface-200/70 bg-surface-50/95 text-left text-xs font-semibold uppercase tracking-wide text-surface-600 backdrop-blur dark:border-surface-600/70 dark:bg-surface-800/95 dark:text-surface-200">
                 <th class="w-10 px-2 py-3">
                   <Checkbox
                     binary
@@ -121,16 +155,16 @@
                     @change="toggleSelectAllCurrentPage"
                   />
                 </th>
-                <th class="px-2 py-3">项目</th>
-                <th class="px-2 py-3">MR</th>
-                <th class="px-2 py-3">文件/行</th>
-                <th class="px-2 py-3">严重度</th>
+                <th class="px-2 py-3 whitespace-nowrap">项目</th>
+                <th class="px-2 py-3 whitespace-nowrap">MR</th>
+                <th class="min-w-[260px] px-2 py-3">文件/行</th>
+                <th class="px-2 py-3 whitespace-nowrap">严重度</th>
                 <th class="min-w-[280px] px-2 py-3">问题描述</th>
-                <th class="px-2 py-3">作者</th>
-                <th class="px-2 py-3">审查状态</th>
-                <th class="px-2 py-3">处理状态</th>
-                <th class="px-2 py-3">最近处理</th>
-                <th class="px-2 py-3 text-right">操作</th>
+                <th class="px-2 py-3 whitespace-nowrap">作者</th>
+                <th class="px-2 py-3 whitespace-nowrap">审查状态</th>
+                <th class="px-2 py-3 whitespace-nowrap">处理状态</th>
+                <th class="px-2 py-3 whitespace-nowrap">最近处理</th>
+                <th class="px-2 py-3 text-right whitespace-nowrap">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -139,49 +173,62 @@
                 :key="row.id"
                 class="border-b border-surface-100/80 align-top transition hover:bg-surface-50/70 dark:border-surface-700/70 dark:hover:bg-surface-700/55"
               >
-                <td class="px-2 py-3">
+                <td class="px-2 py-4">
                   <Checkbox binary :model-value="isSelected(row.id)" @change="toggleSelectRow(row.id)" />
                 </td>
-                <td class="px-2 py-3 text-surface-800 dark:text-surface-100">{{ row.review.project_name || '-' }}</td>
-                <td class="px-2 py-3">
+                <td class="px-2 py-4 whitespace-nowrap text-surface-800 dark:text-surface-100">{{ row.review.project_name || '-' }}</td>
+                <td class="px-2 py-4 whitespace-nowrap">
                   <div class="space-y-1">
-                    <Tag severity="info">!{{ row.review.merge_request_iid }}</Tag>
+                    <Tag class="whitespace-nowrap" severity="info">!{{ row.review.merge_request_iid }}</Tag>
                     <button
                       type="button"
-                      class="block text-xs text-primary hover:underline"
+                      class="block whitespace-nowrap text-xs text-primary hover:underline"
                       @click="goToReview(row.review.id)"
                     >
                       审查 #{{ row.review.id }}
                     </button>
                   </div>
                 </td>
-                <td class="px-2 py-3">
-                  <div class="max-w-[300px] break-all font-mono text-xs text-surface-700 dark:text-surface-200">{{ row.file_path || '-' }}</div>
-                  <div class="text-xs text-surface-500">{{ formatLineRange(row.line_start, row.line_end) }}</div>
+                <td class="px-2 py-4">
+                  <div class="max-w-[320px] space-y-1">
+                    <div
+                      class="truncate text-xs font-semibold text-surface-800 dark:text-surface-100"
+                      :title="row.file_path || '-'"
+                    >
+                      {{ fileNameFromPath(row.file_path) }}
+                    </div>
+                    <div
+                      class="truncate font-mono text-[11px] text-surface-500 dark:text-surface-400"
+                      :title="row.file_path || '-'"
+                    >
+                      {{ row.file_path || '-' }}
+                    </div>
+                    <Tag class="whitespace-nowrap text-[11px]" severity="contrast">{{ formatLineRange(row.line_start, row.line_end) }}</Tag>
+                  </div>
                 </td>
-                <td class="px-2 py-3">
-                  <Tag :severity="severityTag(row.severity)">{{ severityLabel(row.severity) }}</Tag>
+                <td class="px-2 py-4 whitespace-nowrap">
+                  <Tag class="whitespace-nowrap" :severity="severityTag(row.severity)">{{ severityLabel(row.severity) }}</Tag>
                 </td>
-                <td class="px-2 py-3">
+                <td class="px-2 py-4">
                   <p class="line-clamp-3 leading-5 text-surface-800 dark:text-surface-100">{{ row.message || '-' }}</p>
                 </td>
-                <td class="px-2 py-3 text-surface-700 dark:text-surface-200">{{ row.review.author_name || row.review.author_email || '-' }}</td>
-                <td class="px-2 py-3">
-                  <Tag :severity="reviewStatusSeverity(row.review.status)">{{ reviewStatusLabel(row.review.status) }}</Tag>
+                <td class="px-2 py-4 whitespace-nowrap text-surface-700 dark:text-surface-200">{{ row.review.author_name || row.review.author_email || '-' }}</td>
+                <td class="px-2 py-4 whitespace-nowrap">
+                  <Tag class="whitespace-nowrap" :severity="reviewStatusSeverity(row.review.status)">{{ reviewStatusLabel(row.review.status) }}</Tag>
                 </td>
-                <td class="px-2 py-3">
-                  <Tag :severity="actionStatusSeverity(row.action_status)">{{ actionStatusLabel(row.action_status) }}</Tag>
+                <td class="px-2 py-4 whitespace-nowrap">
+                  <Tag class="whitespace-nowrap" :severity="actionStatusSeverity(row.action_status)">{{ actionStatusLabel(row.action_status) }}</Tag>
                 </td>
-                <td class="px-2 py-3 text-xs text-surface-600 dark:text-surface-300">
+                <td class="px-2 py-4 whitespace-nowrap text-xs text-surface-600 dark:text-surface-300">
                   <template v-if="row.latest_action">
                     <div class="font-medium text-surface-700 dark:text-surface-200">{{ row.latest_action.actor || '-' }}</div>
                     <div>{{ formatDisplayTime(row.latest_action.action_at) }}</div>
                   </template>
                   <span v-else>-</span>
                 </td>
-                <td class="px-2 py-3 text-right">
-                  <div class="flex justify-end gap-1">
-                    <Button size="small" text @click="goToReview(row.review.id)">详情</Button>
+                <td class="px-2 py-4 text-right">
+                  <div class="flex justify-end gap-1 whitespace-nowrap">
+                    <Button size="small" text @click="openDetailDialog(row)">详情</Button>
                     <Button size="small" text severity="success" :loading="rowActionLoadingId === row.id" @click="submitRowAction(row.id, 'fixed')">修复</Button>
                     <Button size="small" text severity="warn" :loading="rowActionLoadingId === row.id" @click="submitRowAction(row.id, 'todo')">待办</Button>
                     <Button size="small" text severity="secondary" :loading="rowActionLoadingId === row.id" @click="submitRowAction(row.id, 'ignored')">忽略</Button>
@@ -213,6 +260,189 @@
         </div>
       </template>
     </Card>
+
+    <Dialog
+      v-model:visible="detailDialogVisible"
+      modal
+      header="Issue 详情"
+      :style="{ width: 'min(900px, 96vw)' }"
+    >
+      <div v-if="detailRow" class="space-y-4">
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+            <div class="text-xs text-surface-500 dark:text-surface-400">项目</div>
+            <div class="text-sm font-medium text-surface-800 dark:text-surface-100">{{ detailRow.review.project_name || '-' }}</div>
+          </div>
+          <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+            <div class="text-xs text-surface-500 dark:text-surface-400">作者</div>
+            <div class="text-sm font-medium text-surface-800 dark:text-surface-100">{{ detailRow.review.author_name || detailRow.review.author_email || '-' }}</div>
+          </div>
+          <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+            <div class="text-xs text-surface-500 dark:text-surface-400">MR / 审查</div>
+            <div class="flex items-center gap-2">
+              <Tag severity="info" class="whitespace-nowrap">!{{ detailRow.review.merge_request_iid }}</Tag>
+              <button
+                type="button"
+                class="text-xs text-primary hover:underline"
+                @click="goToReview(detailRow.review.id)"
+              >
+                审查 #{{ detailRow.review.id }}
+              </button>
+            </div>
+          </div>
+          <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+            <div class="text-xs text-surface-500 dark:text-surface-400">状态</div>
+            <div class="flex flex-wrap items-center gap-2">
+              <Tag class="whitespace-nowrap" :severity="severityTag(detailRow.severity)">严重度：{{ severityLabel(detailRow.severity) }}</Tag>
+              <Tag class="whitespace-nowrap" :severity="reviewStatusSeverity(detailRow.review.status)">审查：{{ reviewStatusLabel(detailRow.review.status) }}</Tag>
+              <Tag class="whitespace-nowrap" :severity="actionStatusSeverity(detailRow.action_status)">处理：{{ actionStatusLabel(detailRow.action_status) }}</Tag>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+          <div class="text-xs text-surface-500 dark:text-surface-400">文件 / 行</div>
+          <div class="font-mono text-xs text-surface-700 dark:text-surface-200">{{ detailRow.file_path || '-' }}</div>
+          <Tag class="whitespace-nowrap text-[11px]" severity="contrast">{{ formatLineRange(detailRow.line_start, detailRow.line_end) }}</Tag>
+        </div>
+
+        <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+          <div class="text-xs text-surface-500 dark:text-surface-400">问题描述</div>
+          <p class="max-h-56 overflow-auto whitespace-pre-wrap text-sm leading-6 text-surface-800 dark:text-surface-100">{{ detailRow.message || '-' }}</p>
+        </div>
+
+        <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+          <div class="text-xs text-surface-500 dark:text-surface-400">最近处理</div>
+          <template v-if="detailRow.latest_action">
+            <div class="text-sm font-medium text-surface-800 dark:text-surface-100">{{ detailRow.latest_action.actor || '-' }}</div>
+            <div class="text-xs text-surface-500 dark:text-surface-400">{{ formatDisplayTime(detailRow.latest_action.action_at) }}</div>
+            <p class="whitespace-pre-wrap text-sm text-surface-700 dark:text-surface-200">{{ detailRow.latest_action.note || '无备注' }}</p>
+          </template>
+          <div v-else class="text-sm text-surface-600 dark:text-surface-300">暂无处理记录</div>
+        </div>
+      </div>
+    </Dialog>
+
+    <Transition
+      enter-active-class="transform-gpu transition duration-200 ease-out"
+      enter-from-class="translate-y-4 opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transform-gpu transition duration-150 ease-in"
+      leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="translate-y-4 opacity-0"
+    >
+      <div v-if="selectedCount > 0" class="pointer-events-none fixed inset-x-0 bottom-4 z-40 px-3 sm:px-6">
+        <div
+          class="pointer-events-auto mx-auto w-full max-w-[1200px] rounded-2xl border border-primary-200/80 bg-gradient-to-r from-white/95 via-white/95 to-primary-50/75 shadow-xl shadow-primary-200/20 backdrop-blur-sm dark:border-primary-800/70 dark:from-surface-900/95 dark:via-surface-900/95 dark:to-primary-950/35 dark:shadow-primary-950/20"
+          :class="isCompactBatchPanel ? 'p-2.5' : 'p-3'"
+        >
+          <div
+            class="flex flex-col xl:grid xl:items-start"
+            :class="isCompactBatchPanel ? 'gap-2.5 xl:grid-cols-[1.55fr_1fr]' : 'gap-3 xl:grid-cols-[1.45fr_1fr]'"
+          >
+            <div :class="isCompactBatchPanel ? 'space-y-2.5' : 'space-y-3'">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <div class="inline-flex items-center gap-2 text-sm font-semibold text-surface-800 dark:text-surface-100">
+                    <span class="inline-flex h-2 w-2 rounded-full bg-primary-500" />
+                    批量操作
+                  </div>
+                  <Tag severity="contrast" class="text-[11px] dark:!bg-surface-700 dark:!text-surface-200">已选 {{ selectedCount }} 项</Tag>
+                  <Tag severity="info" class="text-[11px]">当前页 {{ selectedOnPageCount }} 项</Tag>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <div class="inline-flex items-center gap-1 rounded-lg border border-surface-200/80 bg-white/80 p-0.5 dark:border-surface-700/80 dark:bg-surface-900/70">
+                    <Button
+                      size="small"
+                      label="标准"
+                      :text="batchPanelDensity !== 'standard'"
+                      :severity="batchPanelDensity === 'standard' ? 'primary' : 'secondary'"
+                      :disabled="batchLoading"
+                      @click="setBatchPanelDensity('standard')"
+                    />
+                    <Button
+                      size="small"
+                      label="紧凑"
+                      :text="batchPanelDensity !== 'compact'"
+                      :severity="batchPanelDensity === 'compact' ? 'primary' : 'secondary'"
+                      :disabled="batchLoading"
+                      @click="setBatchPanelDensity('compact')"
+                    />
+                  </div>
+                  <Button
+                    size="small"
+                    text
+                    icon="pi pi-times"
+                    label="清空选择"
+                    :disabled="batchLoading"
+                    @click="clearSelection"
+                  />
+                </div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2" :class="isCompactBatchPanel ? 'gap-1.5' : 'gap-2'">
+                <Button
+                  size="small"
+                  severity="success"
+                  icon="pi pi-check-circle"
+                  label="标记已修复"
+                  :loading="batchLoading"
+                  @click="submitBatchAction('fixed')"
+                />
+                <Button
+                  size="small"
+                  severity="warn"
+                  icon="pi pi-clock"
+                  label="标记待处理"
+                  :loading="batchLoading"
+                  @click="submitBatchAction('todo')"
+                />
+                <Button
+                  size="small"
+                  severity="secondary"
+                  icon="pi pi-eye-slash"
+                  label="标记已忽略"
+                  :loading="batchLoading"
+                  @click="submitBatchAction('ignored')"
+                />
+                <Button
+                  size="small"
+                  severity="info"
+                  icon="pi pi-refresh"
+                  label="标记重新打开"
+                  :loading="batchLoading"
+                  @click="submitBatchAction('reopened')"
+                />
+              </div>
+            </div>
+            <div
+              class="w-full rounded-xl border border-surface-200/80 bg-white/80 dark:border-surface-700/80 dark:bg-surface-900/70"
+              :class="isCompactBatchPanel ? 'p-2.5' : 'p-3'"
+            >
+              <div class="text-xs font-medium text-surface-600 dark:text-surface-300" :class="isCompactBatchPanel ? 'mb-1.5' : 'mb-2'">处理信息</div>
+              <div class="grid grid-cols-1" :class="isCompactBatchPanel ? 'gap-1.5' : 'gap-2'">
+                <label class="flex flex-col gap-1">
+                  <span class="text-[11px] font-medium text-surface-500 dark:text-surface-400">处理人</span>
+                  <InputText v-model="actionActor" class="filter-control w-full" placeholder="默认当前登录用户" />
+                </label>
+                <label class="flex flex-col gap-1">
+                  <span class="text-[11px] font-medium text-surface-500 dark:text-surface-400">处理备注</span>
+                  <Textarea
+                    v-model="actionNote"
+                    :rows="isCompactBatchPanel ? 1 : 2"
+                    autoResize
+                    class="w-full"
+                    placeholder="可选，填写处理说明"
+                  />
+                </label>
+                <div v-if="!isCompactBatchPanel" class="text-[11px] text-surface-500 dark:text-surface-400">
+                  批量操作会写入每条 Issue 的最近处理记录
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -220,7 +450,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Loader2 } from 'lucide-vue-next'
-import { createReviewFindingActionsBatch, getProjects, getReviewFindingsList } from '@/api/index'
+import { createReviewFindingActionsBatch, getProjects, getReviewFindingsList, getReviews } from '@/api/index'
 import { formatBackendDateTime } from '@/utils/datetime'
 import { getReviewStatusMeta } from '@/utils/reviewStatus'
 import { useAuthStore } from '@/stores/auth'
@@ -228,6 +458,8 @@ import { toast } from '@/utils/toast'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
+import DatePicker from 'primevue/datepicker'
+import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
@@ -275,6 +507,13 @@ interface ProjectOption {
   value: number | null
 }
 
+interface AuthorOption {
+  label: string
+  value: string
+}
+
+type BatchPanelDensity = 'standard' | 'compact'
+
 const router = useRouter()
 const auth = useAuthStore()
 auth.hydrate()
@@ -282,6 +521,8 @@ auth.hydrate()
 const loading = ref(false)
 const batchLoading = ref(false)
 const rowActionLoadingId = ref<number | null>(null)
+const detailDialogVisible = ref(false)
+const detailRow = ref<WorkbenchFinding | null>(null)
 
 const findings = ref<WorkbenchFinding[]>([])
 const total = ref(0)
@@ -294,14 +535,15 @@ const selectedProjectId = ref<number | null>(null)
 const selectedSeverity = ref('')
 const selectedReviewStatus = ref('')
 const selectedActionStatus = ref('')
-const author = ref('')
-const startAt = ref('')
-const endAt = ref('')
+const selectedAuthor = ref('')
+const selectedTimeRange = ref<(Date | null)[] | null>(null)
 
 const actionActor = ref(auth.username || '')
 const actionNote = ref('')
+const batchPanelDensity = ref<BatchPanelDensity>('standard')
 
 const projectOptions = ref<ProjectOption[]>([{ label: '全部项目', value: null }])
+const authorOptions = ref<AuthorOption[]>([{ label: '全部作者', value: '' }])
 
 const severityOptions = [
   { label: '全部严重度', value: '' },
@@ -334,8 +576,20 @@ const totalPages = computed(() => {
   const pages = Math.ceil(total.value / pageSize.value)
   return Math.max(pages, 1)
 })
+const isCompactBatchPanel = computed(() => batchPanelDensity.value === 'compact')
 
 const currentPageIds = computed(() => findings.value.map((item) => item.id))
+const selectedOnPageCount = computed(() => currentPageIds.value.filter((id) => selectedIds.value.includes(id)).length)
+const activeFiltersCount = computed(() => {
+  let count = 0
+  if (selectedProjectId.value != null) count += 1
+  if (selectedSeverity.value) count += 1
+  if (selectedReviewStatus.value) count += 1
+  if (selectedActionStatus.value) count += 1
+  if (selectedAuthor.value) count += 1
+  if (Array.isArray(selectedTimeRange.value) && selectedTimeRange.value.some((item) => item instanceof Date)) count += 1
+  return count
+})
 
 const isCurrentPageAllSelected = computed(() => {
   if (currentPageIds.value.length === 0) return false
@@ -352,12 +606,40 @@ const clearSelection = () => {
   selectedIds.value = []
 }
 
-const toIsoString = (value: string): string | undefined => {
-  const trimmed = value.trim()
-  if (!trimmed) return undefined
-  const parsed = new Date(trimmed)
-  if (Number.isNaN(parsed.getTime())) return undefined
-  return parsed.toISOString()
+const BATCH_PANEL_DENSITY_STORAGE_KEY = 'issue-workbench-batch-panel-density'
+
+const setBatchPanelDensity = (density: BatchPanelDensity) => {
+  batchPanelDensity.value = density
+  try {
+    window.localStorage.setItem(BATCH_PANEL_DENSITY_STORAGE_KEY, density)
+  } catch (error) {
+    console.warn('保存批量操作面板密度失败:', error)
+  }
+}
+
+const hydrateBatchPanelDensity = () => {
+  try {
+    const stored = window.localStorage.getItem(BATCH_PANEL_DENSITY_STORAGE_KEY)
+    if (stored === 'compact' || stored === 'standard') {
+      batchPanelDensity.value = stored
+    }
+  } catch (error) {
+    console.warn('读取批量操作面板密度失败:', error)
+  }
+}
+
+const getRangeTimeIso = (index: 0 | 1): string | undefined => {
+  const range = selectedTimeRange.value
+  if (!Array.isArray(range) || range.length <= index) return undefined
+  const value = range[index]
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return undefined
+  const normalized = new Date(value)
+  if (index === 0) {
+    normalized.setHours(0, 0, 0, 0)
+  } else {
+    normalized.setHours(23, 59, 59, 999)
+  }
+  return normalized.toISOString()
 }
 
 const fetchProjects = async () => {
@@ -394,6 +676,42 @@ const fetchProjects = async () => {
   }
 }
 
+const fetchAuthors = async () => {
+  try {
+    const unique = new Map<string, AuthorOption>()
+    let page = 1
+    let expectedTotal = 0
+    let loadedCount = 0
+    const pageSize = 100
+    const maxPages = 200
+
+    while (page <= maxPages) {
+      const offset = (page - 1) * pageSize
+      const resp = await getReviews({ limit: pageSize, offset })
+      const results = Array.isArray(resp?.results) ? resp.results : []
+      expectedTotal = Number(resp?.total || resp?.count || expectedTotal || 0)
+      if (results.length === 0) break
+
+      for (const item of results) {
+        const authorName = String(item?.author_name || '').trim()
+        const authorEmail = String(item?.author_email || '').trim()
+        const value = authorEmail || authorName
+        if (!value) continue
+        const label = authorName && authorEmail ? `${authorName} (${authorEmail})` : authorName || authorEmail
+        unique.set(value, { label, value })
+      }
+
+      loadedCount += results.length
+      if (expectedTotal > 0 && loadedCount >= expectedTotal) break
+      page += 1
+    }
+
+    authorOptions.value = [{ label: '全部作者', value: '' }, ...[...unique.values()].sort((a, b) => a.label.localeCompare(b.label))]
+  } catch (error) {
+    console.error('获取作者列表失败:', error)
+  }
+}
+
 const fetchFindings = async (allowClamp: boolean = true) => {
   loading.value = true
   clearSelection()
@@ -405,9 +723,9 @@ const fetchFindings = async (allowClamp: boolean = true) => {
       severities: selectedSeverity.value || undefined,
       review_statuses: selectedReviewStatus.value || undefined,
       action_statuses: selectedActionStatus.value || undefined,
-      author: author.value.trim() || undefined,
-      start_at: toIsoString(startAt.value),
-      end_at: toIsoString(endAt.value),
+      author: selectedAuthor.value || undefined,
+      start_at: getRangeTimeIso(0),
+      end_at: getRangeTimeIso(1),
     }
 
     const resp = await getReviewFindingsList(params)
@@ -441,9 +759,8 @@ const resetFilters = () => {
   selectedSeverity.value = ''
   selectedReviewStatus.value = ''
   selectedActionStatus.value = ''
-  author.value = ''
-  startAt.value = ''
-  endAt.value = ''
+  selectedAuthor.value = ''
+  selectedTimeRange.value = null
   currentPage.value = 1
   fetchFindings()
 }
@@ -536,10 +853,23 @@ const goToReview = (reviewId: number) => {
   router.push(`/reviews/${reviewId}`)
 }
 
+const openDetailDialog = (row: WorkbenchFinding) => {
+  detailRow.value = row
+  detailDialogVisible.value = true
+}
+
 const formatLineRange = (lineStart: number | null, lineEnd: number | null): string => {
   if (lineStart == null) return '行号 -'
   if (lineEnd != null && lineEnd !== lineStart) return `L${lineStart}-L${lineEnd}`
   return `L${lineStart}`
+}
+
+const fileNameFromPath = (path: string | null | undefined): string => {
+  const raw = String(path || '').trim()
+  if (!raw) return '-'
+  const normalized = raw.replace(/\\/g, '/')
+  const segments = normalized.split('/').filter(Boolean)
+  return segments.length > 0 ? segments[segments.length - 1] : normalized
 }
 
 const severityTag = (severity: string): 'danger' | 'warn' | 'success' | 'secondary' => {
@@ -569,11 +899,12 @@ const actionStatusLabel = (status: string): string => {
   return status || '未知'
 }
 
-const actionStatusSeverity = (status: string): 'success' | 'warn' | 'info' | 'secondary' => {
+const actionStatusSeverity = (status: string): 'success' | 'warn' | 'info' | 'danger' | 'secondary' => {
   const normalized = String(status || '').toLowerCase()
   if (normalized === 'fixed') return 'success'
   if (normalized === 'todo') return 'warn'
   if (normalized === 'reopened') return 'info'
+  if (normalized === 'ignored') return 'danger'
   return 'secondary'
 }
 
@@ -583,7 +914,28 @@ const reviewStatusSeverity = (status: string): 'success' | 'info' | 'danger' | '
 const formatDisplayTime = (value: string | null | undefined): string => formatBackendDateTime(value)
 
 onMounted(() => {
+  hydrateBatchPanelDensity()
   void fetchProjects()
+  void fetchAuthors()
   void fetchFindings()
 })
 </script>
+
+<style scoped>
+.filter-control {
+  min-height: 2.25rem;
+}
+
+:deep(.filter-control.p-inputtext),
+:deep(.filter-control.p-select .p-select-label),
+:deep(.filter-control.p-datepicker .p-inputtext) {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+:deep(.filter-control.p-select .p-select-dropdown) {
+  width: 2rem;
+}
+</style>

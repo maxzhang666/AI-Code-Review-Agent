@@ -33,7 +33,19 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      sourcemap: false
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return
+            if (id.includes('zrender')) return 'vendor-zrender'
+            if (id.includes('echarts')) return 'vendor-echarts'
+            if (id.includes('primevue') || id.includes('@primeuix') || id.includes('primeicons')) return 'vendor-primevue'
+            if (id.includes('lucide-vue-next')) return 'vendor-lucide'
+            if (id.includes('vue-router') || id.includes('pinia') || id.includes('/vue/')) return 'vendor-vue'
+          }
+        }
+      }
     }
   }
 })

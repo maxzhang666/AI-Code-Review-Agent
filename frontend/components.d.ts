@@ -33,7 +33,6 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SidebarContent: typeof import('./src/components/SidebarContent.vue')['default']
-    SidebarContentMenu: typeof import('./src/components/SidebarContentMenu.vue')['default']
     SimpleModal: typeof import('./src/components/ui/SimpleModal.vue')['default']
     WebhookEventRulesTab: typeof import('./src/components/config/WebhookEventRulesTab.vue')['default']
     WebhookEventTab: typeof import('./src/components/project/WebhookEventTab.vue')['default']
