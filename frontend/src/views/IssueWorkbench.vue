@@ -362,26 +362,39 @@ const toIsoString = (value: string): string | undefined => {
 
 const fetchProjects = async () => {
   try {
-    const resp = await getProjects({ limit: 200, page: 1 })
-    const results = Array.isArray(resp?.results) ? resp.results : (Array.isArray(resp) ? resp : [])
-    const normalized = results
-      .map((item: any) => ({
-        label: String(item?.project_name || `项目 ${item?.project_id ?? '-'}`),
-        value: typeof item?.project_id === 'number' ? item.project_id : null,
-      }))
-      .filter((item: ProjectOption) => item.value != null)
-
     const unique = new Map<number, ProjectOption>()
-    for (const item of normalized) {
-      unique.set(item.value as number, item)
+    let page = 1
+    let expectedTotal = 0
+    let loadedCount = 0
+    const maxPages = 200
+
+    while (page <= maxPages) {
+      const resp = await getProjects({ page })
+      const results = Array.isArray(resp?.results) ? resp.results : []
+      expectedTotal = Number(resp?.count || expectedTotal || 0)
+      if (results.length === 0) break
+
+      for (const item of results) {
+        const projectId = typeof item?.project_id === 'number' ? item.project_id : null
+        if (projectId == null) continue
+        unique.set(projectId, {
+          label: String(item?.project_name || `项目 ${projectId}`),
+          value: projectId,
+        })
+      }
+
+      loadedCount += results.length
+      if (expectedTotal > 0 && loadedCount >= expectedTotal) break
+      page += 1
     }
+
     projectOptions.value = [{ label: '全部项目', value: null }, ...[...unique.values()].sort((a, b) => a.label.localeCompare(b.label))]
   } catch (error) {
     console.error('获取项目列表失败:', error)
   }
 }
 
-const fetchFindings = async () => {
+const fetchFindings = async (allowClamp: boolean = true) => {
   loading.value = true
   clearSelection()
   try {
@@ -400,6 +413,14 @@ const fetchFindings = async () => {
     const resp = await getReviewFindingsList(params)
     findings.value = Array.isArray(resp?.results) ? resp.results : []
     total.value = Number(resp?.total || resp?.count || 0)
+    if (allowClamp) {
+      const pages = Math.max(Math.ceil(total.value / pageSize.value), 1)
+      if (currentPage.value > pages) {
+        currentPage.value = pages
+        await fetchFindings(false)
+        return
+      }
+    }
   } catch (error: any) {
     console.error('获取 Issue 工作台列表失败:', error)
     toast.error(error?.response?.data?.detail || '获取 Issue 工作台列表失败')
