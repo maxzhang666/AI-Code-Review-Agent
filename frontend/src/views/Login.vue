@@ -1,130 +1,88 @@
 <template>
-  <div class="relative min-h-screen overflow-hidden bg-[radial-gradient(42rem_28rem_at_12%_0%,rgba(125,184,255,0.35),transparent_72%),radial-gradient(36rem_24rem_at_96%_100%,rgba(122,240,255,0.3),transparent_70%),#eff5ff] dark:bg-[radial-gradient(42rem_28rem_at_12%_0%,rgba(52,94,166,0.35),transparent_72%),radial-gradient(36rem_24rem_at_96%_100%,rgba(52,142,171,0.25),transparent_70%),#0c1526]">
-    <div class="pointer-events-none absolute -top-20 left-1/4 h-52 w-52 rounded-full bg-primary-200/60 blur-3xl dark:bg-primary-600/20"></div>
-    <div class="pointer-events-none absolute -bottom-20 right-0 h-60 w-60 rounded-full bg-cyan-200/60 blur-3xl dark:bg-cyan-500/20"></div>
+  <div class="login-page">
+    <main class="layout">
+      <section class="hero">
+        <h1>Code Review<br />管理平台</h1>
+        <p>统一管理项目接入、自动化代码审查与问题治理流程，覆盖审查记录、Issue 工作台、周报与系统配置，帮助团队稳定提升交付质量。</p>
+        <div class="hero-grid">
+          <div class="hero-cell">项目管理</div>
+          <div class="hero-cell">审查记录</div>
+          <div class="hero-cell">问题分析</div>
+          <div class="hero-cell">Issue 工作台</div>
+          <div class="hero-cell">配置管理</div>
+          <div class="hero-cell">系统日志</div>
+        </div>
+      </section>
 
-    <main class="relative mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-8 sm:px-6 sm:py-12">
-      <section class="w-full rounded-3xl border border-white/90 bg-surface-0/85 p-4 shadow-[0_28px_56px_rgba(23,58,111,0.16)] backdrop-blur-sm dark:border-surface-700/70 dark:bg-surface-900/80 sm:p-6 lg:p-8">
-        <article class="rounded-2xl border border-primary-100/80 bg-[linear-gradient(120deg,#eff6ff,#f4ffff)] p-5 dark:border-primary-700/60 dark:bg-[linear-gradient(120deg,rgba(30,58,138,0.36),rgba(8,47,73,0.36))] sm:p-6">
-          <div class="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <p class="inline-flex items-center gap-2 rounded-full border border-primary-200/90 bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-primary-700 dark:border-primary-500/50 dark:bg-primary-500/10 dark:text-primary-200">
-                <ShieldCheck class="h-3.5 w-3.5" />
-                Code Review Agent
-              </p>
-              <h1 class="mt-4 text-3xl font-semibold tracking-tight text-surface-900 dark:text-surface-0 sm:text-4xl">
-                统一安全登录入口
-              </h1>
-              <p class="mt-3 max-w-3xl text-sm leading-6 text-surface-600 dark:text-surface-300">
-                登录后可访问代码审查、项目配置与系统管理功能。
-              </p>
-            </div>
-            <div class="flex flex-wrap gap-2 md:justify-end">
-              <span class="rounded-full border border-primary-200/90 bg-white/80 px-3 py-1 text-xs text-primary-700 dark:border-primary-500/45 dark:bg-primary-500/10 dark:text-primary-200">代码审查</span>
-              <span class="rounded-full border border-primary-200/90 bg-white/80 px-3 py-1 text-xs text-primary-700 dark:border-primary-500/45 dark:bg-primary-500/10 dark:text-primary-200">项目配置</span>
-              <span class="rounded-full border border-primary-200/90 bg-white/80 px-3 py-1 text-xs text-primary-700 dark:border-primary-500/45 dark:bg-primary-500/10 dark:text-primary-200">权限管理</span>
-              <span class="rounded-full border border-primary-200/90 bg-white/80 px-3 py-1 text-xs text-primary-700 dark:border-primary-500/45 dark:bg-primary-500/10 dark:text-primary-200">操作审计</span>
+      <section class="login-panel">
+        <span class="tag">secure access</span>
+        <h2>账号登录</h2>
+
+        <form class="form-stack" @submit.prevent="handleSubmit">
+          <div>
+            <label class="field-label">账号</label>
+            <IconField class="w-full">
+              <InputIcon class="text-surface-400">
+                <User class="h-4 w-4" />
+              </InputIcon>
+              <InputText
+                v-model="username"
+                autocomplete="username"
+                placeholder="请输入账号"
+                class="w-full"
+                :disabled="isSubmitting"
+              />
+            </IconField>
+          </div>
+
+          <div>
+            <label class="field-label">密码</label>
+            <div class="relative">
+              <IconField class="w-full">
+                <InputIcon class="text-surface-400">
+                  <LockKeyhole class="h-4 w-4" />
+                </InputIcon>
+                <InputText
+                  v-model="password"
+                  :type="showPassword ? 'text' : 'password'"
+                  autocomplete="current-password"
+                  placeholder="请输入密码"
+                  class="w-full pr-11"
+                  :disabled="isSubmitting"
+                />
+              </IconField>
+              <button
+                type="button"
+                class="password-eye"
+                :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+                @click="showPassword = !showPassword"
+              >
+                <span class="relative block h-4 w-4">
+                  <EyeOff v-if="showPassword" class="absolute inset-0 h-4 w-4" />
+                  <Eye v-else class="absolute inset-0 h-4 w-4" />
+                </span>
+              </button>
             </div>
           </div>
-        </article>
 
-        <article class="mt-5 grid gap-5 xl:grid-cols-[1fr_420px]">
-          <section class="rounded-2xl border border-primary-100/80 bg-surface-0 p-5 dark:border-primary-700/50 dark:bg-surface-900/70 sm:p-6">
-            <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-0">登录说明</h2>
-            <p class="mt-2 text-sm leading-6 text-surface-600 dark:text-surface-300">请使用已授权账号登录。</p>
-            <div class="mt-5 grid gap-3 sm:grid-cols-2">
-              <div class="rounded-xl border border-primary-100/80 bg-primary-50/45 p-4 dark:border-primary-600/35 dark:bg-primary-500/10">
-                <p class="text-sm font-semibold text-primary-700 dark:text-primary-200">安全范围</p>
-                <p class="mt-1 text-xs leading-5 text-surface-600 dark:text-surface-300">审查记录与配置数据受保护。</p>
-              </div>
-              <div class="rounded-xl border border-primary-100/80 bg-primary-50/45 p-4 dark:border-primary-600/35 dark:bg-primary-500/10">
-                <p class="text-sm font-semibold text-primary-700 dark:text-primary-200">访问控制</p>
-                <p class="mt-1 text-xs leading-5 text-surface-600 dark:text-surface-300">按角色分配可访问的功能。</p>
-              </div>
-              <div class="rounded-xl border border-primary-100/80 bg-primary-50/45 p-4 dark:border-primary-600/35 dark:bg-primary-500/10">
-                <p class="text-sm font-semibold text-primary-700 dark:text-primary-200">会话保护</p>
-                <p class="mt-1 text-xs leading-5 text-surface-600 dark:text-surface-300">异常会话将要求重新登录。</p>
-              </div>
-              <div class="rounded-xl border border-primary-100/80 bg-primary-50/45 p-4 dark:border-primary-600/35 dark:bg-primary-500/10">
-                <p class="text-sm font-semibold text-primary-700 dark:text-primary-200">审计追踪</p>
-                <p class="mt-1 text-xs leading-5 text-surface-600 dark:text-surface-300">关键操作全量记录，便于追溯。</p>
-              </div>
-            </div>
-          </section>
+          <div class="form-row">
+            <label class="remember-label">
+              <Checkbox v-model="rememberMe" binary :disabled="isSubmitting" />
+              记住我
+            </label>
+            <span>登录后继续访问</span>
+          </div>
 
-          <section class="rounded-2xl border border-primary-100/80 bg-[linear-gradient(180deg,#ffffff,#f4f9ff)] p-6 dark:border-primary-700/50 dark:bg-[linear-gradient(180deg,rgba(24,24,27,0.92),rgba(9,9,11,0.96))] sm:p-7">
-            <div class="mb-6 space-y-2">
-              <h2 class="text-2xl font-semibold tracking-tight text-surface-900 dark:text-surface-0">账号登录</h2>
-              <p class="text-sm text-surface-500 dark:text-surface-400">请输入账号和密码以继续访问后台系统。</p>
-            </div>
+          <div class="error-slot">
+            <p v-if="errorMessage" class="hint">
+              {{ errorMessage }}
+            </p>
+          </div>
 
-            <form class="space-y-5" @submit.prevent="handleSubmit">
-              <div class="space-y-2">
-                <label class="text-xs font-medium uppercase tracking-wide text-surface-500 dark:text-surface-400">账号</label>
-                <IconField class="w-full">
-                  <InputIcon class="text-surface-400">
-                    <User class="h-4 w-4" />
-                  </InputIcon>
-                  <InputText
-                    v-model="username"
-                    autocomplete="username"
-                    placeholder="请输入账号"
-                    class="w-full"
-                    :disabled="isSubmitting"
-                  />
-                </IconField>
-              </div>
-
-              <div class="space-y-2">
-                <label class="text-xs font-medium uppercase tracking-wide text-surface-500 dark:text-surface-400">密码</label>
-                <div class="relative">
-                  <IconField class="w-full">
-                    <InputIcon class="text-surface-400">
-                      <LockKeyhole class="h-4 w-4" />
-                    </InputIcon>
-                    <InputText
-                      v-model="password"
-                      :type="showPassword ? 'text' : 'password'"
-                      autocomplete="current-password"
-                      placeholder="请输入密码"
-                      class="w-full pr-11"
-                      :disabled="isSubmitting"
-                    />
-                  </IconField>
-                  <button
-                    type="button"
-                    class="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-surface-500 leading-none transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-surface-100"
-                    :aria-label="showPassword ? '隐藏密码' : '显示密码'"
-                    @click="showPassword = !showPassword"
-                  >
-                    <span class="relative block h-4 w-4">
-                      <EyeOff v-if="showPassword" class="absolute inset-0 h-4 w-4" />
-                      <Eye v-else class="absolute inset-0 h-4 w-4" />
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              <div class="flex items-center justify-between text-sm">
-                <label class="inline-flex cursor-pointer items-center gap-2 text-surface-600 dark:text-surface-300">
-                  <Checkbox v-model="rememberMe" binary :disabled="isSubmitting" />
-                  记住我
-                </label>
-                <span class="text-xs text-surface-500">登录后继续访问</span>
-              </div>
-
-              <div class="min-h-11">
-                <p v-if="errorMessage" class="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
-                  {{ errorMessage }}
-                </p>
-              </div>
-
-              <Button type="submit" :loading="isSubmitting" class="w-full">
-                登录
-              </Button>
-            </form>
-          </section>
-        </article>
+          <Button type="submit" :loading="isSubmitting" class="login-btn w-full">
+            登录
+          </Button>
+        </form>
       </section>
     </main>
   </div>
@@ -133,7 +91,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Eye, EyeOff, LockKeyhole, ShieldCheck, User } from 'lucide-vue-next'
+import { Eye, EyeOff, LockKeyhole, User } from 'lucide-vue-next'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import IconField from 'primevue/iconfield'
@@ -181,12 +139,366 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-:deep(.p-inputtext) {
-  transition-property: border-color, box-shadow, background-color, color;
+.login-page {
+  --ink: #0d1f38;
+  --paper: #f9fcff;
+  --line: #bed3f8;
+  --muted: #526787;
+  box-sizing: border-box;
+  min-height: 100dvh;
+  padding: 20px;
+  background: linear-gradient(118deg, #f3f8ff 0%, #f3f8ff 54%, #dcecff 54%, #dcecff 100%);
+  color: var(--ink);
+  font-family: 'Plus Jakarta Sans', 'PingFang SC', 'Segoe UI', sans-serif;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
 }
 
-:deep(.p-button),
-:deep(.p-checkbox-box) {
-  transition-property: border-color, box-shadow, background-color, color;
+.login-page::before,
+.login-page::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(44px);
+  pointer-events: none;
+}
+
+.login-page::before {
+  width: 340px;
+  height: 340px;
+  left: -120px;
+  top: -90px;
+  background: #5a9bff88;
+}
+
+.login-page::after {
+  width: 300px;
+  height: 300px;
+  right: -90px;
+  bottom: -70px;
+  background: #53d3ff88;
+}
+
+.layout {
+  position: relative;
+  z-index: 1;
+  width: min(1100px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+  gap: clamp(10px, 1.2vw, 14px);
+  align-items: stretch;
+}
+
+.hero {
+  border: 1px solid #d1e2ff;
+  border-radius: 24px;
+  background: linear-gradient(160deg, #e8f3ff, #f6fbff);
+  padding: clamp(16px, 2.2vw, 22px);
+  display: grid;
+  align-content: center;
+}
+
+.hero h1 {
+  margin: 0 0 6px;
+  font-size: clamp(30px, 4.2vw, 46px);
+  letter-spacing: -0.03em;
+  line-height: 1.04;
+  color: #113972;
+}
+
+.hero p {
+  margin: 0;
+  color: #355784;
+  font-size: clamp(14px, 1.35vw, 16px);
+  line-height: 1.62;
+  max-width: 58ch;
+}
+
+.hero-grid {
+  margin-top: clamp(10px, 1.3vw, 14px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hero-cell {
+  border: 1px solid #c7dbff;
+  border-radius: 12px;
+  background: #ffffffc9;
+  padding: 8px 9px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #3e5f8b;
+  text-align: center;
+  transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.hero-cell:hover {
+  border-color: #b5d1ff;
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.login-panel {
+  border: 1px solid #d8e4ff;
+  border-radius: 24px;
+  background: #ffffffec;
+  box-shadow: 0 18px 42px #295ca61d, 0 1px 0 #ffffffa1 inset;
+  padding: clamp(14px, 1.7vw, 18px);
+  backdrop-filter: blur(6px);
+}
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2153aa;
+  border: 1px solid #bfd7ff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #edf4ff;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.login-panel h2 {
+  margin: 0 0 4px;
+  font-size: clamp(26px, 2.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.form-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #4b6388;
+  margin-bottom: 4px;
+}
+
+.password-eye {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: #566b8c;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.password-eye:hover {
+  background: #edf4ff;
+  color: #22487f;
+}
+
+.form-row {
+  margin-top: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: #5d7396;
+  line-height: 1.3;
+}
+
+.form-row > span {
+  color: #6b81a5;
+}
+
+.remember-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.error-slot {
+  min-height: 24px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.hint {
+  margin-top: 0;
+  font-size: 13px;
+  color: #bd1b29;
+  background: #fff1f3;
+  border: 1px solid #ffd0d5;
+  border-radius: 10px;
+  padding: 5px 8px;
+  line-height: 1.5;
+}
+
+:deep(.p-inputtext) {
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffffd4;
+  color: var(--ink);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+:deep(.p-inputtext::placeholder) {
+  color: #6a82a7;
+}
+
+:deep(.p-inputtext:enabled:hover) {
+  border-color: #a9c8fa;
+}
+
+:deep(.p-inputtext:enabled:focus) {
+  border-color: #3a7df4;
+  box-shadow: 0 0 0 3px #1d68f220;
+  background: #fff;
+}
+
+:deep(.p-iconfield .p-inputicon) {
+  margin-top: -0.5rem;
+  color: #6a82a7;
+}
+
+:deep(.p-button.login-btn) {
+  border: none;
+  height: 40px;
+  border-radius: 12px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1c69f2, #409bff);
+  box-shadow: 0 10px 20px #236eea33;
+  margin-top: 0;
+  transition: transform 0.16s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+:deep(.p-button.login-btn:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px #236eea3d;
+  filter: brightness(1.03);
+}
+
+:deep(.p-button.login-btn:active) {
+  transform: translateY(0);
+}
+
+:deep(.p-checkbox .p-checkbox-box) {
+  border-color: #c3d8ff;
+}
+
+:global(.dark) .login-page {
+  --ink: #dce8ff;
+  --paper: #0e1a2d;
+  --line: #2f4870;
+  --muted: #a6bfdf;
+  background: linear-gradient(118deg, #081628 0%, #081628 54%, #0f2947 54%, #0f2947 100%);
+}
+
+:global(.dark) .hero {
+  border-color: #2b4266;
+  background: linear-gradient(160deg, #102640, #0d2038);
+}
+
+:global(.dark) .hero h1 {
+  color: #d7e6ff;
+}
+
+:global(.dark) .hero p,
+:global(.dark) .hero-cell {
+  color: #aec6e6;
+}
+
+:global(.dark) .hero-cell {
+  border-color: #35537f;
+  background: #112841;
+}
+
+:global(.dark) .hero-cell:hover {
+  border-color: #436497;
+  background: #153150;
+}
+
+:global(.dark) .login-panel {
+  border-color: #2a4469;
+  background: #09182ccc;
+  box-shadow: 0 18px 42px #02071266, 0 1px 0 #143457 inset;
+}
+
+:global(.dark) .tag {
+  color: #9ec3ff;
+  border-color: #4168a2;
+  background: #0d2544;
+}
+
+:global(.dark) .password-eye:hover {
+  background: #173454;
+  color: #d4e4ff;
+}
+
+:global(.dark) :deep(.p-inputtext) {
+  background: #10243bcc;
+}
+
+:global(.dark) :deep(.p-inputtext:enabled:hover) {
+  border-color: #4d6d9a;
+}
+
+:global(.dark) :deep(.p-inputtext:enabled:focus) {
+  border-color: #6ba0ff;
+  box-shadow: 0 0 0 3px #5e96ff2f;
+  background: #102840;
+}
+
+:global(.dark) .form-row > span {
+  color: #93b2de;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+    justify-items: center;
+  }
+
+  .hero {
+    display: none;
+  }
+
+  .login-panel {
+    width: min(390px, 100%);
+    padding: 14px;
+  }
+}
+
+@media (max-width: 520px) {
+  .login-page {
+    padding: 12px;
+  }
+
+  .login-panel {
+    padding: 12px;
+  }
+
+  .layout {
+    gap: 10px;
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .login-panel h2 {
+    font-size: 24px;
+  }
 }
 </style>
