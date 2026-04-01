@@ -89,7 +89,8 @@ async def init_db() -> None:
 _PENDING_COLUMNS: list[tuple[str, str, str]] = [
     # (table, column, DDL suffix)
     ("gitlab_configs", "site_url", "VARCHAR(500) NOT NULL DEFAULT ''"),
-    ("llm_providers", "is_default", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("llm_providers", "is_default", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("projects", "ignore_strategy_enabled", "BOOLEAN NOT NULL DEFAULT TRUE"),
     ("merge_request_reviews", "review_issues", "TEXT NOT NULL DEFAULT '[]'"),
     ("merge_request_reviews", "review_summary", "TEXT NOT NULL DEFAULT ''"),
     ("merge_request_reviews", "review_highlights", "TEXT NOT NULL DEFAULT '[]'"),
@@ -97,7 +98,14 @@ _PENDING_COLUMNS: list[tuple[str, str, str]] = [
     ("review_findings", "owner_email", "VARCHAR(255) NULL"),
     ("review_findings", "issue_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
     ("review_findings", "code_snippet", "TEXT NOT NULL DEFAULT ''"),
+    ("review_finding_actions", "ignore_reason_code", "VARCHAR(64) NOT NULL DEFAULT ''"),
+    ("review_finding_actions", "ignore_reason_note", "TEXT NOT NULL DEFAULT ''"),
+    ("review_finding_actions", "actor_user_id", "INTEGER NULL"),
+    ("review_finding_actions", "actor_username", "VARCHAR(128) NOT NULL DEFAULT ''"),
+    ("review_finding_actions", "source", "VARCHAR(32) NOT NULL DEFAULT ''"),
     ("webhook_logs", "pipeline_trace", "TEXT NOT NULL DEFAULT '{}'"),
+    ("task_observations", "run_id", "VARCHAR(64) NULL"),
+    ("task_events", "run_id", "VARCHAR(64) NULL"),
 ]
 
 

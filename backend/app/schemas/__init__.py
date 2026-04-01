@@ -36,8 +36,19 @@ from app.schemas.project import (
     ProjectWebhookEventPromptUpdate,
 )
 from app.schemas.queue import TaskRecordResponse
+from app.schemas.scheduler_observability import (
+    WeeklySnapshotSchedulerLogItem,
+    WeeklySnapshotSchedulerLogListResponse,
+)
 from app.schemas.review import MergeRequestReviewResponse
 from app.schemas.system_config import SystemConfigItem, SystemConfigUpdate
+from app.schemas.task_observability import (
+    TaskDetailResponse,
+    TaskEventItem,
+    TaskListResponse,
+    TaskObservationItem,
+    TaskSummaryResponse,
+)
 from app.schemas.webhook import WebhookLogResponse
 
 __all__ = [
@@ -71,7 +82,14 @@ __all__ = [
     "SuccessResponse",
     "SystemConfigItem",
     "SystemConfigUpdate",
+    "TaskDetailResponse",
+    "TaskEventItem",
+    "TaskListResponse",
+    "TaskObservationItem",
+    "TaskSummaryResponse",
     "TaskRecordResponse",
+    "WeeklySnapshotSchedulerLogItem",
+    "WeeklySnapshotSchedulerLogListResponse",
     "WebhookEventRuleCreate",
     "WebhookEventRuleResponse",
     "WebhookEventRuleUpdate",

@@ -136,6 +136,17 @@ class ReviewFindingAction(Base):
     action_type: Mapped[str] = mapped_column(sa.String(20), index=True)
     actor: Mapped[str] = mapped_column(sa.String(255))
     note: Mapped[str] = mapped_column(sa.Text, default="", server_default="")
+    ignore_reason_code: Mapped[str] = mapped_column(
+        sa.String(64), default="", server_default="", index=True
+    )
+    ignore_reason_note: Mapped[str] = mapped_column(
+        sa.Text, default="", server_default=""
+    )
+    actor_user_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True, index=True)
+    actor_username: Mapped[str] = mapped_column(
+        sa.String(128), default="", server_default="", index=True
+    )
+    source: Mapped[str] = mapped_column(sa.String(32), default="", server_default="")
     action_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=False), server_default=sa.func.now(), index=True
     )

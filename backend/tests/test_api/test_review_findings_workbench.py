@@ -261,6 +261,82 @@ async def test_workbench_batch_actions_returns_success_and_failed_counts(client,
 
 
 @pytest.mark.asyncio
+async def test_workbench_batch_ignored_requires_reason_code(client, db_session) -> None:
+    review = await _create_review(
+        db_session,
+        project_id=9101,
+        status="completed",
+        author_name="Batch Tester",
+        author_email="batch@example.com",
+    )
+    finding = await _create_finding(
+        db_session,
+        review_id=review.id,
+        severity="medium",
+        message="finding-ignored-validation",
+        created_at=datetime(2026, 3, 15, 12, 0, 0),
+    )
+
+    response = await client.post(
+        "/api/webhook/review-findings/actions/batch/",
+        json={
+            "finding_ids": [finding.id],
+            "action_type": "ignored",
+            "note": "legacy note",
+        },
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    detail = str(payload.get("message") or payload.get("detail") or "")
+    assert "ignore_reason_code" in detail
+
+
+@pytest.mark.asyncio
+async def test_workbench_batch_ignored_persists_structured_reason_and_actor(client, db_session) -> None:
+    review = await _create_review(
+        db_session,
+        project_id=9102,
+        status="completed",
+        author_name="Batch Tester",
+        author_email="batch@example.com",
+    )
+    finding = await _create_finding(
+        db_session,
+        review_id=review.id,
+        severity="high",
+        message="finding-ignored-persist",
+        created_at=datetime(2026, 3, 15, 12, 30, 0),
+    )
+
+    response = await client.post(
+        "/api/webhook/review-findings/actions/batch/",
+        json={
+            "finding_ids": [finding.id],
+            "action_type": "ignored",
+            "ignore_reason_code": "business_exception",
+            "ignore_reason_note": "",
+            "actor": "spoofed-user",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success_count"] == 1
+
+    row = (
+        await db_session.execute(
+            select(ReviewFindingAction)
+            .where(ReviewFindingAction.finding_id == finding.id)
+            .order_by(ReviewFindingAction.id.desc())
+        )
+    ).scalars().first()
+    assert row is not None
+    assert row.actor == "admin"
+    assert row.actor_username == "admin"
+    assert row.ignore_reason_code == "business_exception"
+
+
+@pytest.mark.asyncio
 async def test_workbench_list_rejects_invalid_action_statuses(client) -> None:
     response = await client.get(
         "/api/webhook/review-findings/",

@@ -24,6 +24,16 @@ app.use(PrimeVue, {
     options: {
       darkModeSelector: '.dark'
     }
+  },
+  pt: {
+    paginator: {
+      pcRowPerPageDropdown: {
+        root: { class: 'p-select-sm p-inputfield-sm' }
+      },
+      pcJumpToPageInputText: {
+        pcInputText: { class: 'p-inputtext-sm p-inputfield-sm' }
+      }
+    }
   }
 })
 

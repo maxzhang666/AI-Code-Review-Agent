@@ -60,13 +60,27 @@
   word-break: keep-all;
 }
 
-.dashboard-activity-tooltip {
-  max-width: min(22rem, calc(100vw - 1.5rem));
+.p-tooltip.dashboard-activity-tooltip {
+  width: fit-content;
+  max-width: none;
 }
 
-.dashboard-activity-tooltip [data-pc-section='text'] {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.p-tooltip.dashboard-activity-tooltip .p-tooltip-text,
+.p-tooltip.dashboard-activity-tooltip [data-pc-section='text'] {
+  max-width: none;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.p-paginator .p-paginator-page,
+.p-paginator .p-paginator-first,
+.p-paginator .p-paginator-prev,
+.p-paginator .p-paginator-next,
+.p-paginator .p-paginator-last,
+.p-paginator .p-paginator-current {
+  font-size: 0.75rem;
 }
 
 /* Smooth transitions */

@@ -7,11 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.core.deps import get_db
-from app.models import MergeRequestReview, ReviewFinding, ReviewFindingAction, WebhookLog
+from app.models import (
+    AuthUser,
+    MergeRequestReview,
+    ProjectIgnoreStrategy,
+    ReviewFinding,
+    ReviewFindingAction,
+    WebhookLog,
+)
 from app.schemas.review import (
     MergeRequestReviewResponse,
     ReviewFindingActionCreate,
+    ReviewFindingActionListResponse,
     ReviewFindingBatchActionCreate,
     ReviewFindingBatchActionResponse,
     ReviewFindingActionResponse,
@@ -30,6 +39,96 @@ router = APIRouter()
 ALLOWED_ACTION_STATUSES = ("unprocessed", "fixed", "todo", "ignored", "reopened")
 LEGACY_MATERIALIZATION_BATCH_SIZE = 200
 LEGACY_MATERIALIZATION_SCAN_CAP = 2000
+_IGNORED_ACTION_TYPE = "ignored"
+_IGNORE_REASON_NOTE_REQUIRED_CODES = {"defer_fix", "other"}
+_REOPENED_ACTION_TYPE = "reopened"
+_STRATEGY_STATUS_ACTIVE = "active"
+_STRATEGY_STATUS_DISABLED = "disabled"
+
+
+def _validate_ignore_action_payload(
+    *,
+    action_type: str,
+    ignore_reason_code: str | None,
+    ignore_reason_note: str,
+) -> tuple[str, str]:
+    normalized_action = str(action_type or "").strip().lower()
+    normalized_reason_code = str(ignore_reason_code or "").strip().lower()
+    normalized_reason_note = str(ignore_reason_note or "").strip()
+
+    if normalized_action != _IGNORED_ACTION_TYPE:
+        return "", ""
+
+    if not normalized_reason_code:
+        raise HTTPException(status_code=422, detail="ignore_reason_code is required when action_type is ignored.")
+    if (
+        normalized_reason_code in _IGNORE_REASON_NOTE_REQUIRED_CODES
+        and not normalized_reason_note
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "ignore_reason_note is required when "
+                "ignore_reason_code is defer_fix or other."
+            ),
+        )
+    return normalized_reason_code, normalized_reason_note
+
+
+def _derive_rule_key(category: str, subcategory: str) -> str:
+    category_norm = str(category or "").strip().lower() or "unknown"
+    subcategory_norm = str(subcategory or "").strip().lower()
+    return f"{category_norm}.{subcategory_norm}" if subcategory_norm else category_norm
+
+
+def _derive_path_pattern(file_path: str) -> str | None:
+    normalized = str(file_path or "").strip().replace("\\", "/")
+    if not normalized:
+        return None
+    parts = [item for item in normalized.split("/") if item]
+    if len(parts) <= 1:
+        return None
+    return f"{parts[0]}/**"
+
+
+async def _disable_matched_ignore_strategies_for_reopened(
+    db: AsyncSession,
+    *,
+    finding: ReviewFinding,
+    disabled_reason: str,
+    disabled_at: datetime,
+) -> None:
+    review = await db.get(MergeRequestReview, finding.review_id)
+    if review is None:
+        return
+
+    rule_key = _derive_rule_key(finding.category, finding.subcategory)
+    path_pattern = _derive_path_pattern(finding.file_path)
+    conditions = [
+        ProjectIgnoreStrategy.project_id == review.project_id,
+        ProjectIgnoreStrategy.rule_key == rule_key,
+        ProjectIgnoreStrategy.status == _STRATEGY_STATUS_ACTIVE,
+    ]
+    if path_pattern is None:
+        conditions.append(ProjectIgnoreStrategy.path_pattern.is_(None))
+    else:
+        conditions.append(
+            or_(
+                ProjectIgnoreStrategy.path_pattern.is_(None),
+                ProjectIgnoreStrategy.path_pattern == path_pattern,
+            )
+        )
+    rows = (
+        await db.execute(
+            select(ProjectIgnoreStrategy)
+            .where(and_(*conditions))
+            .order_by(ProjectIgnoreStrategy.id.desc())
+        )
+    ).scalars().all()
+    for row in rows:
+        row.status = _STRATEGY_STATUS_DISABLED
+        row.disabled_at = disabled_at
+        row.disabled_reason = disabled_reason[:1000]
 
 
 def _to_bucket_rows(rows: list[tuple[Any, Any]]) -> list[ReviewStatsBucket]:
@@ -530,18 +629,41 @@ async def create_review_finding_action(
     finding_id: int,
     payload: ReviewFindingActionCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: AuthUser = Depends(get_current_user),
 ) -> ReviewFindingActionResponse:
     finding = await db.get(ReviewFinding, finding_id)
     if finding is None:
         raise HTTPException(status_code=404, detail="Review finding not found.")
 
+    ignore_reason_code, ignore_reason_note = _validate_ignore_action_payload(
+        action_type=payload.action_type,
+        ignore_reason_code=payload.ignore_reason_code,
+        ignore_reason_note=payload.ignore_reason_note,
+    )
+    actor_name = str(current_user.username or "").strip()[:255]
+    actor_username = str(current_user.username or "").strip()[:128]
     action = ReviewFindingAction(
         finding_id=finding_id,
         action_type=payload.action_type,
-        actor=payload.actor,
+        actor=actor_name,
         note=payload.note,
+        ignore_reason_code=ignore_reason_code,
+        ignore_reason_note=ignore_reason_note,
+        actor_user_id=current_user.id,
+        actor_username=actor_username,
+        source="api",
     )
     db.add(action)
+    if payload.action_type == _REOPENED_ACTION_TYPE:
+        await _disable_matched_ignore_strategies_for_reopened(
+            db,
+            finding=finding,
+            disabled_reason=(
+                "Auto-disabled by reopened finding action "
+                f"(finding_id={finding.id}, action_source=api)"
+            ),
+            disabled_at=datetime.now(),
+        )
     await db.commit()
     await db.refresh(action)
     return ReviewFindingActionResponse.model_validate(action, from_attributes=True)
@@ -551,6 +673,7 @@ async def create_review_finding_action(
 async def batch_create_review_finding_actions(
     payload: ReviewFindingBatchActionCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: AuthUser = Depends(get_current_user),
 ) -> ReviewFindingBatchActionResponse:
     finding_ids: list[int] = []
     seen: set[int] = set()
@@ -560,13 +683,22 @@ async def batch_create_review_finding_actions(
         seen.add(finding_id)
         finding_ids.append(finding_id)
 
-    existing_ids = set(
+    existing_finding_rows = (
         (
             await db.execute(
-                select(ReviewFinding.id).where(ReviewFinding.id.in_(finding_ids))
+                select(ReviewFinding).where(ReviewFinding.id.in_(finding_ids))
             )
         ).scalars().all()
     )
+    existing_findings = {item.id: item for item in existing_finding_rows}
+    existing_ids = set(existing_findings.keys())
+    ignore_reason_code, ignore_reason_note = _validate_ignore_action_payload(
+        action_type=payload.action_type,
+        ignore_reason_code=payload.ignore_reason_code,
+        ignore_reason_note=payload.ignore_reason_note,
+    )
+    actor_name = str(current_user.username or "").strip()[:255]
+    actor_username = str(current_user.username or "").strip()[:128]
     actions: list[ReviewFindingAction] = []
     failed_ids: list[int] = []
     for finding_id in finding_ids:
@@ -577,19 +709,61 @@ async def batch_create_review_finding_actions(
             ReviewFindingAction(
                 finding_id=finding_id,
                 action_type=payload.action_type,
-                actor=payload.actor,
+                actor=actor_name,
                 note=payload.note,
+                ignore_reason_code=ignore_reason_code,
+                ignore_reason_note=ignore_reason_note,
+                actor_user_id=current_user.id,
+                actor_username=actor_username,
+                source="api",
             )
         )
 
     if actions:
         db.add_all(actions)
+        if payload.action_type == _REOPENED_ACTION_TYPE:
+            now = datetime.now()
+            for finding in (existing_findings[item] for item in finding_ids if item in existing_findings):
+                await _disable_matched_ignore_strategies_for_reopened(
+                    db,
+                    finding=finding,
+                    disabled_reason=(
+                        "Auto-disabled by reopened finding action "
+                        f"(finding_id={finding.id}, action_source=batch_api)"
+                    ),
+                    disabled_at=now,
+                )
         await db.commit()
 
     return ReviewFindingBatchActionResponse(
         success_count=len(actions),
         failed_count=len(failed_ids),
         failed_ids=failed_ids,
+    )
+
+
+@router.get(
+    "/review-findings/{finding_id}/actions/",
+    response_model=ReviewFindingActionListResponse,
+)
+async def list_review_finding_actions(
+    finding_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> ReviewFindingActionListResponse:
+    finding = await db.get(ReviewFinding, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=404, detail="Review finding not found.")
+
+    rows = (
+        await db.execute(
+            select(ReviewFindingAction)
+            .where(ReviewFindingAction.finding_id == finding_id)
+            .order_by(ReviewFindingAction.action_at.desc(), ReviewFindingAction.id.desc())
+        )
+    ).scalars().all()
+    return ReviewFindingActionListResponse(
+        count=len(rows),
+        results=[ReviewFindingActionResponse.model_validate(item, from_attributes=True) for item in rows],
     )
 
 

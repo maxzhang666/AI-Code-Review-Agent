@@ -269,7 +269,7 @@ const vTooltip = Tooltip
 const compactTooltip = (value: string) => ({
   value,
   class: 'dashboard-compact-tooltip dashboard-activity-tooltip',
-  fitContent: false
+  fitContent: true
 })
 
 const stats = ref({

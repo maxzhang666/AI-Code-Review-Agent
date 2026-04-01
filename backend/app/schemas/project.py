@@ -18,6 +18,7 @@ class ProjectResponse(BaseModel):
     review_enabled: bool
     auto_review_on_mr: bool
     gitlab_comment_notifications_enabled: bool
+    ignore_strategy_enabled: bool
     enabled_webhook_events: list[int]
     exclude_file_types: list[str]
     ignore_file_patterns: list[str]
@@ -45,6 +46,7 @@ class ProjectListResponse(BaseModel):
     namespace: str
     description: str = ""
     review_enabled: bool
+    ignore_strategy_enabled: bool
     commits_count: int = 0
     mr_count: int = 0
     members_count: int = 0
@@ -61,6 +63,7 @@ class ProjectUpdate(BaseModel):
     exclude_file_types: list[str] | None = None
     ignore_file_patterns: list[str] | None = None
     gitlab_comment_notifications_enabled: bool | None = None
+    ignore_strategy_enabled: bool | None = None
     default_llm_provider_id: int | None = None
 
 
@@ -121,3 +124,47 @@ class ProjectImportResultItem(BaseModel):
     success: bool = True
     webhook_registered: bool = False
     error: str | None = None
+
+
+class ProjectIgnoreStrategyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    project_id: int
+    rule_key: str
+    path_pattern: str | None = None
+    signature: str
+    title: str = ""
+    reason_summary: str = ""
+    ignore_condition: str = ""
+    boundary_condition: str = ""
+    sample_count_4w: int = 0
+    active_weeks_4w: int = 0
+    confidence_score: float = 0.0
+    status: str = "active"
+    effective_at: datetime | None = None
+    expire_at: datetime | None = None
+    disabled_at: datetime | None = None
+    disabled_reason: str = ""
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ProjectIgnoreStrategyListResponse(BaseModel):
+    count: int
+    results: list[ProjectIgnoreStrategyResponse] = Field(default_factory=list)
+
+
+class ProjectIgnoreStrategyDisableRequest(BaseModel):
+    reason: str = ""
+
+
+class ProjectIgnoreStrategyDisableAllRequest(BaseModel):
+    project_id: int
+    reason: str = ""
+
+
+class ProjectIgnoreStrategyDisableAllResponse(BaseModel):
+    project_id: int
+    disabled_count: int = 0
+    disabled_at: datetime | None = None

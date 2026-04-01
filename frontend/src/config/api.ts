@@ -42,6 +42,9 @@ export const API_ENDPOINTS = {
   MR_FEEDBACK_WEEKLY_REPORT: '/webhook/reports/mr-feedback/weekly/',
   DEVELOPER_WEEKLY_REPORT: '/webhook/reports/developers/weekly/',
   DEVELOPER_WEEKLY_CARDS: '/webhook/reports/developers/weekly/cards/',
+  IGNORE_STRATEGIES: '/webhook/reports/ignore-strategies/',
+  IGNORE_STRATEGY_DISABLE: (id: string | number) => `/webhook/reports/ignore-strategies/${id}/disable/`,
+  IGNORE_STRATEGIES_DISABLE_ALL: '/webhook/reports/ignore-strategies/disable-all/',
 
   // 配置管理
   CONFIG: '/config/',
@@ -57,6 +60,13 @@ export const API_ENDPOINTS = {
   SYSTEM_INFO: '/system/info',
   SYSTEM_LOG_FILES: '/system/log-files/',
   SYSTEM_LOG_FILE_CONTENT: '/system/log-files/content/',
+  SYSTEM_TASKS_SUMMARY: '/system/tasks/summary',
+  SYSTEM_TASKS: '/system/tasks/',
+  SYSTEM_TASK_DETAIL: (taskId: string) => `/system/tasks/${taskId}`,
+  SYSTEM_TASK_EVENTS: (taskId: string) => `/system/tasks/${taskId}/events`,
+  SYSTEM_WEEKLY_SCHEDULER_LOGS: '/system/reports/developers/weekly/scheduler-logs',
+  SYSTEM_MAINTENANCE_CLEANUP_TASK_EVENTS: '/system/maintenance/cleanup/task-events',
+  SYSTEM_MAINTENANCE_CLEANUP_WEEKLY_SCHEDULER_LOGS: '/system/maintenance/cleanup/weekly-scheduler-logs',
 
   // 仪表盘
   DASHBOARD_STATS: '/webhook/dashboard/stats/',

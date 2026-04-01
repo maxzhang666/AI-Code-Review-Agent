@@ -99,5 +99,20 @@ export const AppPreset = definePreset(Aura, {
         }
       }
     }
+  },
+  components: {
+    paginator: {
+      root: {
+        padding: '0.25rem 0.5rem',
+        gap: '0.25rem'
+      },
+      navButton: {
+        width: '1.75rem',
+        height: '1.75rem'
+      },
+      jumpToPageInput: {
+        maxWidth: '4.5rem'
+      }
+    }
   }
 })

@@ -84,6 +84,32 @@
           </div>
 
           <div class="rounded-lg border border-surface-200/70 bg-surface-50/70 p-3 dark:border-surface-700/70 dark:bg-surface-900">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold text-surface-900 dark:text-surface-0">自动生成忽略策略</div>
+                <div class="mt-1 text-xs text-surface-600 dark:text-surface-300">与成员周报同周期执行，聚合近 4 周忽略动作。</div>
+              </div>
+              <ToggleSwitch
+                :model-value="config.autoIgnoreStrategyEnabled"
+                @update:model-value="updateConfig({ autoIgnoreStrategyEnabled: Boolean($event) })"
+              />
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-surface-200/70 bg-surface-50/70 p-3 dark:border-surface-700/70 dark:bg-surface-900">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold text-surface-900 dark:text-surface-0">自动生效候选策略</div>
+                <div class="mt-1 text-xs text-surface-600 dark:text-surface-300">关闭后仅产出预览，不写入生效策略。</div>
+              </div>
+              <ToggleSwitch
+                :model-value="config.autoIgnoreStrategyApply"
+                @update:model-value="updateConfig({ autoIgnoreStrategyApply: Boolean($event) })"
+              />
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-surface-200/70 bg-surface-50/70 p-3 dark:border-surface-700/70 dark:bg-surface-900">
             <div class="mb-2 text-sm font-semibold text-surface-900 dark:text-surface-0">总结纳入状态</div>
             <div class="flex flex-wrap gap-2">
               <button
@@ -146,6 +172,8 @@ export interface WeeklySnapshotSchedulerForm {
   triggerHour: number
   pollSeconds: number
   useLlm: boolean
+  autoIgnoreStrategyEnabled: boolean
+  autoIgnoreStrategyApply: boolean
   includeStatuses: WeeklySummaryStatus[]
 }
 

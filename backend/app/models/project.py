@@ -28,6 +28,9 @@ class Project(Base):
     gitlab_comment_notifications_enabled: Mapped[bool] = mapped_column(
         sa.Boolean, default=True, server_default=sa.true()
     )
+    ignore_strategy_enabled: Mapped[bool] = mapped_column(
+        sa.Boolean, default=True, server_default=sa.true()
+    )
 
     enabled_webhook_events: Mapped[list[int]] = mapped_column(sa.JSON, default=list)
     exclude_file_types: Mapped[list[str]] = mapped_column(sa.JSON, default=list)

@@ -28,7 +28,11 @@ from app.services.gitlab import GitLabService
 from app.services.mr_feedback import CommandParseError, parse_mr_feedback_command
 from app.services.notification import NotificationDispatcher
 from app.services.report import ReportGenerator
-from app.services.reporting import generate_last_week_developer_weekly_summaries
+from app.services.reporting import (
+    build_ignore_strategy_prompt_for_project,
+    generate_ignore_strategy_weekly_report,
+    generate_last_week_developer_weekly_summaries,
+)
 from app.services.repository import RepositoryManager
 from app.services.review import ReviewResultParser, ReviewService
 from app.services.review_structured import (
@@ -223,6 +227,8 @@ async def _find_event_rule(
 async def _resolve_custom_prompt(
     db: AsyncSession,
     project_pk: int,
+    project_id: int,
+    ignore_strategy_enabled: bool,
     event_rule_id: int,
     context: dict[str, Any],
 ) -> str | None:
@@ -236,10 +242,21 @@ async def _resolve_custom_prompt(
         .limit(1)
     )
     prompt_config = (await db.execute(stmt)).scalars().first()
-    if prompt_config is None or not prompt_config.custom_prompt:
-        return None
-    rendered = prompt_config.render_prompt(context).strip()
-    return rendered or None
+    rendered = (
+        prompt_config.render_prompt(context).strip()
+        if prompt_config is not None and prompt_config.custom_prompt
+        else ""
+    )
+    ignore_strategy_prompt = (
+        await build_ignore_strategy_prompt_for_project(
+            db,
+            project_id=project_id,
+        )
+        if ignore_strategy_enabled
+        else ""
+    )
+    parts = [item for item in [rendered, ignore_strategy_prompt] if item]
+    return "\n\n".join(parts) if parts else None
 
 
 def _is_note_hook_event(event_type: str, payload: dict[str, Any]) -> bool:
@@ -385,6 +402,7 @@ async def _handle_note_feedback(
 
 @register_task("generate_developer_weekly_snapshot")
 async def generate_developer_weekly_snapshot(data: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(data.get("run_id") or "").strip() or None
     include_statuses_raw = data.get("include_statuses")
     include_statuses = (
         [str(item).strip() for item in include_statuses_raw if str(item).strip()]
@@ -402,9 +420,29 @@ async def generate_developer_weekly_snapshot(data: dict[str, Any]) -> dict[str, 
             reference_date=reference_date,
             include_statuses=include_statuses,
             use_llm=use_llm,
+            run_id=run_id,
         )
         await db.commit()
-        return {"status": "completed", **result}
+        return {"status": "completed", "run_id": run_id, **result}
+
+
+@register_task("generate_ignore_strategy_weekly")
+async def generate_ignore_strategy_weekly(data: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(data.get("run_id") or "").strip() or None
+    reference_date_raw = _parse_iso_date(data.get("reference_date"))
+    anchor_date = reference_date_raw.date() if reference_date_raw is not None else None
+    project_id = _as_int(data.get("project_id"))
+    apply_changes = bool(data.get("apply_changes", True))
+
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        result = await generate_ignore_strategy_weekly_report(
+            db,
+            project_id=project_id,
+            anchor_date=anchor_date,
+            apply_changes=apply_changes,
+        )
+        return {"status": "completed", "run_id": run_id, **result}
 
 
 @register_task("review_mr")
@@ -677,6 +715,8 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 custom_prompt = await _resolve_custom_prompt(
                     db=db,
                     project_pk=project.id,
+                    project_id=project.project_id,
+                    ignore_strategy_enabled=bool(project.ignore_strategy_enabled),
                     event_rule_id=event_rule.id,
                     context=prompt_context,
                 )
@@ -763,6 +803,8 @@ async def review_merge_request(data: dict[str, Any]) -> dict[str, Any]:
                 custom_prompt = await _resolve_custom_prompt(
                     db=db,
                     project_pk=project.id,
+                    project_id=project.project_id,
+                    ignore_strategy_enabled=bool(project.ignore_strategy_enabled),
                     event_rule_id=event_rule.id,
                     context=prompt_context,
                 )

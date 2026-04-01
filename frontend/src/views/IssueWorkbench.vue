@@ -229,10 +229,46 @@
                 <td class="px-2 py-4 text-right">
                   <div class="flex justify-end gap-1 whitespace-nowrap">
                     <Button size="small" text @click="openDetailDialog(row)">详情</Button>
-                    <Button size="small" text severity="success" :loading="rowActionLoadingId === row.id" @click="submitRowAction(row.id, 'fixed')">修复</Button>
-                    <Button size="small" text severity="warn" :loading="rowActionLoadingId === row.id" @click="submitRowAction(row.id, 'todo')">待办</Button>
-                    <Button size="small" text severity="secondary" :loading="rowActionLoadingId === row.id" @click="submitRowAction(row.id, 'ignored')">忽略</Button>
-                    <Button size="small" text severity="info" :loading="rowActionLoadingId === row.id" @click="submitRowAction(row.id, 'reopened')">重开</Button>
+                    <Button
+                      v-if="canShowRowAction(row, 'todo')"
+                      size="small"
+                      text
+                      severity="warn"
+                      :loading="rowActionLoadingId === row.id"
+                      @click="submitRowAction(row.id, 'todo')"
+                    >
+                      待办
+                    </Button>
+                    <Button
+                      v-if="canShowRowAction(row, 'fixed')"
+                      size="small"
+                      text
+                      severity="success"
+                      :loading="rowActionLoadingId === row.id"
+                      @click="submitRowAction(row.id, 'fixed')"
+                    >
+                      修复
+                    </Button>
+                    <Button
+                      v-if="canShowRowAction(row, 'ignored')"
+                      size="small"
+                      text
+                      severity="secondary"
+                      :loading="rowActionLoadingId === row.id"
+                      @click="openIgnoreDialog([row.id])"
+                    >
+                      忽略
+                    </Button>
+                    <Button
+                      v-if="canShowRowAction(row, 'reopened')"
+                      size="small"
+                      text
+                      severity="info"
+                      :loading="rowActionLoadingId === row.id"
+                      @click="submitRowAction(row.id, 'reopened')"
+                    >
+                      重开
+                    </Button>
                   </div>
                 </td>
               </tr>
@@ -252,11 +288,16 @@
 
         <div class="mt-4 flex flex-col gap-3 border-t border-surface-200/60 pt-4 sm:flex-row sm:items-center sm:justify-between dark:border-surface-700/60">
           <span class="text-xs text-surface-500 dark:text-surface-400">共 {{ total }} 条记录</span>
-          <div class="flex items-center gap-2">
-            <Button text size="small" :disabled="currentPage <= 1 || loading" @click="changePage(currentPage - 1)">上一页</Button>
-            <span class="text-xs text-surface-600 dark:text-surface-300">第 {{ currentPage }} / {{ totalPages }} 页</span>
-            <Button text size="small" :disabled="currentPage >= totalPages || loading" @click="changePage(currentPage + 1)">下一页</Button>
-          </div>
+          <Paginator
+            class="w-full sm:w-auto"
+            :first="paginatorFirst"
+            :rows="pageSize"
+            :totalRecords="total"
+            :rowsPerPageOptions="rowsPerPageOptions"
+            :template="paginatorTemplate"
+            currentPageReportTemplate="第 {currentPage} / {totalPages} 页，共 {totalRecords} 条"
+            @page="handlePaginatorPage"
+          />
         </div>
       </template>
     </Card>
@@ -265,62 +306,200 @@
       v-model:visible="detailDialogVisible"
       modal
       header="Issue 详情"
-      :style="{ width: 'min(900px, 96vw)' }"
+      :style="{ width: 'min(980px, 96vw)' }"
+      :breakpoints="{ '1024px': '96vw', '760px': '99vw' }"
     >
-      <div v-if="detailRow" class="space-y-4">
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
-            <div class="text-xs text-surface-500 dark:text-surface-400">项目</div>
-            <div class="text-sm font-medium text-surface-800 dark:text-surface-100">{{ detailRow.review.project_name || '-' }}</div>
-          </div>
-          <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
-            <div class="text-xs text-surface-500 dark:text-surface-400">作者</div>
-            <div class="text-sm font-medium text-surface-800 dark:text-surface-100">{{ detailRow.review.author_name || detailRow.review.author_email || '-' }}</div>
-          </div>
-          <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
-            <div class="text-xs text-surface-500 dark:text-surface-400">MR / 审查</div>
-            <div class="flex items-center gap-2">
-              <Tag severity="info" class="whitespace-nowrap">!{{ detailRow.review.merge_request_iid }}</Tag>
-              <button
-                type="button"
-                class="text-xs text-primary hover:underline"
-                @click="goToReview(detailRow.review.id)"
-              >
-                审查 #{{ detailRow.review.id }}
-              </button>
+      <div v-if="detailRow" class="max-h-[78vh] space-y-3 overflow-auto pr-0.5">
+        <section class="rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <div class="space-y-1">
+              <div class="text-xs text-surface-500 dark:text-surface-400">文件 / 行</div>
+              <div class="font-mono text-xs text-surface-700 dark:text-surface-200">{{ detailRow.file_path || '-' }}</div>
+              <Tag class="whitespace-nowrap text-[11px]" severity="contrast">{{ formatLineRange(detailRow.line_start, detailRow.line_end) }}</Tag>
             </div>
-          </div>
-          <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
-            <div class="text-xs text-surface-500 dark:text-surface-400">状态</div>
             <div class="flex flex-wrap items-center gap-2">
               <Tag class="whitespace-nowrap" :severity="severityTag(detailRow.severity)">严重度：{{ severityLabel(detailRow.severity) }}</Tag>
               <Tag class="whitespace-nowrap" :severity="reviewStatusSeverity(detailRow.review.status)">审查：{{ reviewStatusLabel(detailRow.review.status) }}</Tag>
               <Tag class="whitespace-nowrap" :severity="actionStatusSeverity(detailRow.action_status)">处理：{{ actionStatusLabel(detailRow.action_status) }}</Tag>
             </div>
           </div>
-        </div>
 
-        <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
-          <div class="text-xs text-surface-500 dark:text-surface-400">文件 / 行</div>
-          <div class="font-mono text-xs text-surface-700 dark:text-surface-200">{{ detailRow.file_path || '-' }}</div>
-          <Tag class="whitespace-nowrap text-[11px]" severity="contrast">{{ formatLineRange(detailRow.line_start, detailRow.line_end) }}</Tag>
-        </div>
+          <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <div class="rounded-md border border-surface-200/70 bg-white p-2 dark:border-surface-700/70 dark:bg-surface-900/70">
+              <div class="text-xs text-surface-500 dark:text-surface-400">项目</div>
+              <div class="mt-0.5 text-sm font-medium text-surface-800 dark:text-surface-100">{{ detailRow.review.project_name || '-' }}</div>
+            </div>
+            <div class="rounded-md border border-surface-200/70 bg-white p-2 dark:border-surface-700/70 dark:bg-surface-900/70">
+              <div class="text-xs text-surface-500 dark:text-surface-400">作者</div>
+              <div class="mt-0.5 text-sm font-medium text-surface-800 dark:text-surface-100">{{ detailRow.review.author_name || detailRow.review.author_email || '-' }}</div>
+            </div>
+            <div class="rounded-md border border-surface-200/70 bg-white p-2 dark:border-surface-700/70 dark:bg-surface-900/70">
+              <div class="text-xs text-surface-500 dark:text-surface-400">MR / 审查</div>
+              <div class="mt-1 flex items-center gap-2">
+                <Tag severity="info" class="whitespace-nowrap">!{{ detailRow.review.merge_request_iid }}</Tag>
+                <button
+                  type="button"
+                  class="text-xs text-primary hover:underline"
+                  @click="goToReview(detailRow.review.id)"
+                >
+                  审查 #{{ detailRow.review.id }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
-          <div class="text-xs text-surface-500 dark:text-surface-400">问题描述</div>
-          <p class="max-h-56 overflow-auto whitespace-pre-wrap text-sm leading-6 text-surface-800 dark:text-surface-100">{{ detailRow.message || '-' }}</p>
-        </div>
+        <div class="grid grid-cols-1 gap-3 xl:grid-cols-[1.5fr_1fr]">
+          <div class="space-y-3">
+            <section class="rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+              <div class="mb-1 text-xs text-surface-500 dark:text-surface-400">问题描述</div>
+              <p class="max-h-56 overflow-auto whitespace-pre-wrap text-sm leading-6 text-surface-800 dark:text-surface-100">{{ detailRow.message || '-' }}</p>
+            </section>
 
-        <div class="space-y-1 rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
-          <div class="text-xs text-surface-500 dark:text-surface-400">最近处理</div>
-          <template v-if="detailRow.latest_action">
-            <div class="text-sm font-medium text-surface-800 dark:text-surface-100">{{ detailRow.latest_action.actor || '-' }}</div>
-            <div class="text-xs text-surface-500 dark:text-surface-400">{{ formatDisplayTime(detailRow.latest_action.action_at) }}</div>
-            <p class="whitespace-pre-wrap text-sm text-surface-700 dark:text-surface-200">{{ detailRow.latest_action.note || '无备注' }}</p>
-          </template>
-          <div v-else class="text-sm text-surface-600 dark:text-surface-300">暂无处理记录</div>
+            <section class="rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+              <div class="mb-1 text-xs text-surface-500 dark:text-surface-400">问题代码</div>
+              <pre
+                v-if="detailRow.code_snippet"
+                class="max-h-96 overflow-auto whitespace-pre-wrap rounded-md bg-slate-900 p-3 text-xs leading-5 text-slate-100"
+              ><code>{{ detailRow.code_snippet }}</code></pre>
+              <div v-else class="text-sm text-surface-600 dark:text-surface-300">暂无问题代码</div>
+            </section>
+          </div>
+
+          <div class="space-y-3">
+            <section class="rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+              <div class="mb-2 flex items-center justify-between">
+                <div class="text-xs font-medium text-surface-500 dark:text-surface-400">快速处理</div>
+                <div class="text-xs text-surface-500 dark:text-surface-400">处理人：{{ currentActorName }}</div>
+              </div>
+              <Textarea
+                v-model="detailActionNote"
+                rows="2"
+                autoResize
+                class="w-full"
+                placeholder="处理备注（可选）"
+              />
+              <div class="mt-2 flex flex-wrap gap-2">
+                <Button
+                  v-if="canShowDetailAction('todo')"
+                  size="small"
+                  severity="warn"
+                  outlined
+                  :loading="detailActionLoading"
+                  label="待处理"
+                  @click="submitDetailAction('todo')"
+                />
+                <Button
+                  v-if="canShowDetailAction('fixed')"
+                  size="small"
+                  severity="success"
+                  outlined
+                  :loading="detailActionLoading"
+                  label="已修复"
+                  @click="submitDetailAction('fixed')"
+                />
+                <Button
+                  v-if="canShowDetailAction('ignored')"
+                  size="small"
+                  severity="secondary"
+                  outlined
+                  :loading="detailActionLoading"
+                  label="忽略"
+                  @click="openIgnoreDialog([detailRow.id], detailActionNote)"
+                />
+                <Button
+                  v-if="canShowDetailAction('reopened')"
+                  size="small"
+                  severity="info"
+                  outlined
+                  :loading="detailActionLoading"
+                  label="重新打开"
+                  @click="submitDetailAction('reopened')"
+                />
+              </div>
+            </section>
+
+            <section class="rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+              <div class="mb-1 text-xs text-surface-500 dark:text-surface-400">最近处理</div>
+              <template v-if="detailRow.latest_action">
+                <div class="text-sm font-medium text-surface-800 dark:text-surface-100">{{ detailRow.latest_action.actor || '-' }}</div>
+                <div class="text-xs text-surface-500 dark:text-surface-400">{{ formatDisplayTime(detailRow.latest_action.action_at) }}</div>
+                <p class="mt-1 whitespace-pre-wrap text-sm text-surface-700 dark:text-surface-200">{{ detailRow.latest_action.note || '无备注' }}</p>
+              </template>
+              <div v-else class="text-sm text-surface-600 dark:text-surface-300">暂无处理记录</div>
+            </section>
+
+            <section class="rounded-lg border border-surface-200/70 bg-surface-50/60 p-3 dark:border-surface-700/70 dark:bg-surface-800/40">
+              <div class="mb-1 text-xs text-surface-500 dark:text-surface-400">处理历史</div>
+              <div v-if="actionHistoryLoading" class="text-sm text-surface-600 dark:text-surface-300">加载中...</div>
+              <div v-else-if="actionHistory.length === 0" class="text-sm text-surface-600 dark:text-surface-300">暂无历史记录</div>
+              <div v-else class="max-h-72 space-y-2 overflow-auto pr-1">
+                <div
+                  v-for="item in actionHistory"
+                  :key="item.id"
+                  class="rounded-md border border-surface-200/80 bg-white/80 p-2 text-xs dark:border-surface-700/70 dark:bg-surface-900/60"
+                >
+                  <div class="mb-1 flex flex-wrap items-center gap-2">
+                    <Tag :severity="actionStatusSeverity(item.action_type)" class="whitespace-nowrap">{{ actionStatusLabel(item.action_type) }}</Tag>
+                    <span class="font-medium text-surface-700 dark:text-surface-200">{{ item.actor || '-' }}</span>
+                    <span class="text-surface-500 dark:text-surface-400">{{ formatDisplayTime(item.action_at) }}</span>
+                  </div>
+                  <div v-if="item.ignore_reason_code" class="mb-1 text-surface-600 dark:text-surface-300">
+                    忽略原因：{{ ignoreReasonLabel(item.ignore_reason_code) }}
+                    <span v-if="item.ignore_reason_note">（{{ item.ignore_reason_note }}）</span>
+                  </div>
+                  <div v-if="item.note" class="whitespace-pre-wrap text-surface-700 dark:text-surface-200">{{ item.note }}</div>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
+    </Dialog>
+
+    <Dialog
+      v-model:visible="ignoreDialogVisible"
+      modal
+      header="忽略原因"
+      :style="{ width: 'min(520px, 95vw)' }"
+    >
+      <div class="space-y-3">
+        <div class="rounded-lg border border-surface-200/70 bg-surface-50/60 p-2.5 text-xs text-surface-600 dark:border-surface-700/70 dark:bg-surface-800/40 dark:text-surface-300">
+          将忽略 {{ ignoreTargetIds.length }} 条 Issue，请填写结构化原因。
+        </div>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-medium text-surface-600 dark:text-surface-300">忽略原因</span>
+          <Select
+            v-model="ignoreReasonCode"
+            :options="ignoreReasonOptions"
+            option-label="label"
+            option-value="value"
+            class="w-full"
+            placeholder="请选择忽略原因"
+          />
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-medium text-surface-600 dark:text-surface-300">
+            原因备注
+            <span v-if="isIgnoreReasonNoteRequired" class="text-red-500">*</span>
+          </span>
+          <Textarea
+            v-model="ignoreReasonNote"
+            rows="3"
+            autoResize
+            class="w-full"
+            placeholder="当原因为“暂缓修复”或“其他”时必填"
+          />
+        </label>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <Button label="取消" text :disabled="ignoreSubmitting" @click="closeIgnoreDialog" />
+          <Button label="确认忽略" severity="secondary" :loading="ignoreSubmitting" @click="confirmIgnoreAction" />
+        </div>
+      </template>
     </Dialog>
 
     <Transition
@@ -386,6 +565,7 @@
                   icon="pi pi-check-circle"
                   label="标记已修复"
                   :loading="batchLoading"
+                  :disabled="!isBatchActionEnabled('fixed')"
                   @click="submitBatchAction('fixed')"
                 />
                 <Button
@@ -394,6 +574,7 @@
                   icon="pi pi-clock"
                   label="标记待处理"
                   :loading="batchLoading"
+                  :disabled="!isBatchActionEnabled('todo')"
                   @click="submitBatchAction('todo')"
                 />
                 <Button
@@ -402,7 +583,8 @@
                   icon="pi pi-eye-slash"
                   label="标记已忽略"
                   :loading="batchLoading"
-                  @click="submitBatchAction('ignored')"
+                  :disabled="!isBatchActionEnabled('ignored')"
+                  @click="openIgnoreDialog(selectedIds)"
                 />
                 <Button
                   size="small"
@@ -410,6 +592,7 @@
                   icon="pi pi-refresh"
                   label="标记重新打开"
                   :loading="batchLoading"
+                  :disabled="!isBatchActionEnabled('reopened')"
                   @click="submitBatchAction('reopened')"
                 />
               </div>
@@ -422,7 +605,7 @@
               <div class="grid grid-cols-1" :class="isCompactBatchPanel ? 'gap-1.5' : 'gap-2'">
                 <label class="flex flex-col gap-1">
                   <span class="text-[11px] font-medium text-surface-500 dark:text-surface-400">处理人</span>
-                  <InputText v-model="actionActor" class="filter-control w-full" placeholder="默认当前登录用户" />
+                  <InputText :model-value="currentActorName" class="filter-control w-full" readonly />
                 </label>
                 <label class="flex flex-col gap-1">
                   <span class="text-[11px] font-medium text-surface-500 dark:text-surface-400">处理备注</span>
@@ -435,7 +618,7 @@
                   />
                 </label>
                 <div v-if="!isCompactBatchPanel" class="text-[11px] text-surface-500 dark:text-surface-400">
-                  批量操作会写入每条 Issue 的最近处理记录
+                  仅会处理状态可变更的 Issue，已忽略/已修复等不适用项会自动跳过
                 </div>
               </div>
             </div>
@@ -450,7 +633,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Loader2 } from 'lucide-vue-next'
-import { createReviewFindingActionsBatch, getProjects, getReviewFindingsList, getReviews } from '@/api/index'
+import { createReviewFindingActionsBatch, getProjects, getReviewFindingActions, getReviewFindingsList, getReviews } from '@/api/index'
 import { formatBackendDateTime } from '@/utils/datetime'
 import { getReviewStatusMeta } from '@/utils/reviewStatus'
 import { useAuthStore } from '@/stores/auth'
@@ -461,11 +644,14 @@ import Checkbox from 'primevue/checkbox'
 import DatePicker from 'primevue/datepicker'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
+import Paginator from 'primevue/paginator'
 import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import Textarea from 'primevue/textarea'
 
 type FindingActionType = 'fixed' | 'ignored' | 'todo' | 'reopened'
+type FindingActionStatus = FindingActionType | 'unprocessed'
+type IgnoreReasonCode = 'business_exception' | 'historical_debt' | 'rule_false_positive' | 'defer_fix' | 'duplicate' | 'other'
 
 interface WorkbenchReviewMeta {
   id: number
@@ -485,7 +671,14 @@ interface WorkbenchActionMeta {
   action_type: string
   actor: string
   note: string
+  ignore_reason_code?: string
+  ignore_reason_note?: string
   action_at: string | null
+}
+
+interface IgnoreReasonOption {
+  label: string
+  value: IgnoreReasonCode
 }
 
 interface WorkbenchFinding {
@@ -496,6 +689,7 @@ interface WorkbenchFinding {
   line_start: number | null
   line_end: number | null
   message: string
+  code_snippet: string
   created_at: string | null
   action_status: string
   latest_action: WorkbenchActionMeta | null
@@ -523,6 +717,15 @@ const batchLoading = ref(false)
 const rowActionLoadingId = ref<number | null>(null)
 const detailDialogVisible = ref(false)
 const detailRow = ref<WorkbenchFinding | null>(null)
+const actionHistoryLoading = ref(false)
+const actionHistory = ref<WorkbenchActionMeta[]>([])
+const ignoreDialogVisible = ref(false)
+const ignoreSubmitting = ref(false)
+const ignoreTargetIds = ref<number[]>([])
+const ignoreReasonCode = ref<IgnoreReasonCode | ''>('')
+const ignoreReasonNote = ref('')
+const ignoreActionNote = ref<string | null>(null)
+const detailActionNote = ref('')
 
 const findings = ref<WorkbenchFinding[]>([])
 const total = ref(0)
@@ -538,7 +741,6 @@ const selectedActionStatus = ref('')
 const selectedAuthor = ref('')
 const selectedTimeRange = ref<(Date | null)[] | null>(null)
 
-const actionActor = ref(auth.username || '')
 const actionNote = ref('')
 const batchPanelDensity = ref<BatchPanelDensity>('standard')
 
@@ -570,12 +772,36 @@ const actionStatusOptions = [
   { label: '重新打开', value: 'reopened' },
 ]
 
+const rowsPerPageOptions = [10, 20, 50, 100]
+const paginatorTemplate = {
+  '640px': 'PrevPageLink CurrentPageReport NextPageLink',
+  '960px': 'FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink RowsPerPageDropdown',
+  default: 'FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown JumpToPageInput CurrentPageReport',
+}
+
+const ignoreReasonOptions: IgnoreReasonOption[] = [
+  { label: '业务特例', value: 'business_exception' },
+  { label: '历史债务', value: 'historical_debt' },
+  { label: '规则误报', value: 'rule_false_positive' },
+  { label: '暂缓修复', value: 'defer_fix' },
+  { label: '重复问题', value: 'duplicate' },
+  { label: '其他', value: 'other' },
+]
+
 const selectedCount = computed(() => selectedIds.value.length)
+const currentActorName = computed(() => auth.username || 'admin')
+const isIgnoreReasonNoteRequired = computed(() => ignoreReasonCode.value === 'defer_fix' || ignoreReasonCode.value === 'other')
+const findingById = computed(() => new Map(findings.value.map((item) => [item.id, item])))
+const detailActionLoading = computed(() => {
+  const findingId = detailRow.value?.id
+  return findingId != null && rowActionLoadingId.value === findingId
+})
 
 const totalPages = computed(() => {
   const pages = Math.ceil(total.value / pageSize.value)
   return Math.max(pages, 1)
 })
+const paginatorFirst = computed(() => Math.max((currentPage.value - 1) * pageSize.value, 0))
 const isCompactBatchPanel = computed(() => batchPanelDensity.value === 'compact')
 
 const currentPageIds = computed(() => findings.value.map((item) => item.id))
@@ -765,9 +991,13 @@ const resetFilters = () => {
   fetchFindings()
 }
 
-const changePage = (page: number) => {
-  if (page < 1 || page > totalPages.value) return
-  currentPage.value = page
+const handlePaginatorPage = (event: { page: number; rows: number }) => {
+  const nextPage = event.page + 1
+  const nextPageSize = event.rows
+  const shouldFetch = nextPage !== currentPage.value || nextPageSize !== pageSize.value
+  if (!shouldFetch) return
+  currentPage.value = nextPage
+  pageSize.value = nextPageSize
   fetchFindings()
 }
 
@@ -789,12 +1019,63 @@ const toggleSelectAllCurrentPage = () => {
   selectedIds.value = [...currentPageIds.value]
 }
 
-const doBatchAction = async (actionType: FindingActionType, ids: number[]) => {
-  const actor = actionActor.value.trim()
-  if (!actor) {
-    toast.warning('请先填写处理人')
-    return false
+const extractErrorMessage = (error: any, fallback: string): string => {
+  const data = error?.response?.data
+  return String(data?.message || data?.detail || fallback)
+}
+
+const normalizeActionStatus = (status: string): FindingActionStatus => {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'fixed' || normalized === 'todo' || normalized === 'ignored' || normalized === 'reopened') {
+    return normalized
   }
+  return 'unprocessed'
+}
+
+const canApplyActionForStatus = (status: string, actionType: FindingActionType): boolean => {
+  const normalizedStatus = normalizeActionStatus(status)
+  if (actionType === 'reopened') return normalizedStatus !== 'unprocessed' && normalizedStatus !== 'reopened'
+  if (actionType === 'ignored') return normalizedStatus !== 'ignored'
+  if (actionType === 'fixed') return normalizedStatus !== 'fixed'
+  if (actionType === 'todo') return normalizedStatus !== 'todo'
+  return true
+}
+
+const canShowRowAction = (row: WorkbenchFinding, actionType: FindingActionType): boolean =>
+  canApplyActionForStatus(row.action_status, actionType)
+
+const getActionableSelectedIds = (actionType: FindingActionType): number[] =>
+  selectedIds.value.filter((id) => {
+    const finding = findingById.value.get(id)
+    return Boolean(finding && canApplyActionForStatus(finding.action_status, actionType))
+  })
+
+const isBatchActionEnabled = (actionType: FindingActionType): boolean =>
+  !batchLoading.value && getActionableSelectedIds(actionType).length > 0
+
+const canShowDetailAction = (actionType: FindingActionType): boolean => {
+  if (!detailRow.value) return false
+  return canShowRowAction(detailRow.value, actionType)
+}
+
+const syncDetailStateAfterAction = (findingId: number) => {
+  if (!detailDialogVisible.value || detailRow.value?.id !== findingId) return
+  const refreshed = findings.value.find((item) => item.id === findingId)
+  if (refreshed) {
+    detailRow.value = refreshed
+  }
+  void fetchActionHistory(findingId)
+}
+
+const doBatchAction = async (
+  actionType: FindingActionType,
+  ids: number[],
+  options?: {
+    ignoreReasonCode?: IgnoreReasonCode
+    ignoreReasonNote?: string
+    note?: string
+  },
+) => {
   if (ids.length === 0) {
     toast.warning('请先选择要处理的记录')
     return false
@@ -804,8 +1085,9 @@ const doBatchAction = async (actionType: FindingActionType, ids: number[]) => {
     const resp = await createReviewFindingActionsBatch({
       finding_ids: ids,
       action_type: actionType,
-      actor,
-      note: actionNote.value.trim(),
+      note: typeof options?.note === 'string' ? options.note.trim() : actionNote.value.trim(),
+      ignore_reason_code: options?.ignoreReasonCode,
+      ignore_reason_note: options?.ignoreReasonNote?.trim() || '',
     })
 
     const successCount = Number(resp?.success_count || 0)
@@ -818,15 +1100,28 @@ const doBatchAction = async (actionType: FindingActionType, ids: number[]) => {
     return true
   } catch (error: any) {
     console.error('批量处理失败:', error)
-    toast.error(error?.response?.data?.detail || '批量处理失败')
+    toast.error(extractErrorMessage(error, '批量处理失败'))
     return false
   }
 }
 
 const submitBatchAction = async (actionType: FindingActionType) => {
+  const actionableIds = getActionableSelectedIds(actionType)
+  if (actionableIds.length === 0) {
+    toast.warning('所选 Issue 当前状态不支持该操作')
+    return
+  }
+  if (actionType === 'ignored') {
+    openIgnoreDialog(actionableIds)
+    return
+  }
+  if (actionType === 'reopened') {
+    const confirmed = window.confirm(`确认重新打开 ${actionableIds.length} 条 Issue 吗？`)
+    if (!confirmed) return
+  }
   batchLoading.value = true
   try {
-    const ok = await doBatchAction(actionType, selectedIds.value)
+    const ok = await doBatchAction(actionType, actionableIds)
     if (!ok) return
     actionNote.value = ''
     clearSelection()
@@ -836,16 +1131,55 @@ const submitBatchAction = async (actionType: FindingActionType) => {
   }
 }
 
-const submitRowAction = async (id: number, actionType: FindingActionType) => {
+const submitRowAction = async (
+  id: number,
+  actionType: FindingActionType,
+  options?: {
+    note?: string
+    preserveSelection?: boolean
+  },
+): Promise<boolean> => {
+  const finding = findingById.value.get(id)
+  if (finding && !canApplyActionForStatus(finding.action_status, actionType)) {
+    toast.warning('当前状态不支持该操作')
+    return false
+  }
+  if (actionType === 'ignored') {
+    openIgnoreDialog([id], options?.note)
+    return false
+  }
+  if (actionType === 'reopened') {
+    const confirmed = window.confirm('确认将该问题重新打开吗？')
+    if (!confirmed) return false
+  }
   rowActionLoadingId.value = id
   try {
-    const ok = await doBatchAction(actionType, [id])
-    if (!ok) return
-    actionNote.value = ''
-    clearSelection()
+    const ok = await doBatchAction(actionType, [id], { note: options?.note })
+    if (!ok) return false
+    if (typeof options?.note !== 'string') {
+      actionNote.value = ''
+    }
+    if (!options?.preserveSelection) {
+      clearSelection()
+    }
     await fetchFindings()
+    syncDetailStateAfterAction(id)
+    return true
   } finally {
     rowActionLoadingId.value = null
+  }
+}
+
+const submitDetailAction = async (actionType: FindingActionType) => {
+  const findingId = detailRow.value?.id
+  if (findingId == null) return
+  const ok = await submitRowAction(
+    findingId,
+    actionType,
+    { note: detailActionNote.value, preserveSelection: true },
+  )
+  if (ok) {
+    detailActionNote.value = ''
   }
 }
 
@@ -853,9 +1187,103 @@ const goToReview = (reviewId: number) => {
   router.push(`/reviews/${reviewId}`)
 }
 
+const fetchActionHistory = async (findingId: number) => {
+  actionHistoryLoading.value = true
+  actionHistory.value = []
+  try {
+    const resp = await getReviewFindingActions(findingId)
+    actionHistory.value = Array.isArray(resp?.results) ? resp.results : []
+  } catch (error) {
+    console.error('获取处理历史失败:', error)
+    toast.error(extractErrorMessage(error, '获取处理历史失败'))
+  } finally {
+    actionHistoryLoading.value = false
+  }
+}
+
 const openDetailDialog = (row: WorkbenchFinding) => {
   detailRow.value = row
   detailDialogVisible.value = true
+  detailActionNote.value = ''
+  void fetchActionHistory(row.id)
+}
+
+const closeIgnoreDialog = () => {
+  ignoreDialogVisible.value = false
+  ignoreTargetIds.value = []
+  ignoreReasonCode.value = ''
+  ignoreReasonNote.value = ''
+  ignoreActionNote.value = null
+}
+
+const openIgnoreDialog = (ids: number[], note?: string) => {
+  const normalizedIds = Array.from(new Set(ids.filter((item) => Number.isFinite(item) && item > 0)))
+  if (normalizedIds.length === 0) {
+    toast.warning('请先选择要处理的记录')
+    return
+  }
+  const actionableIds = normalizedIds.filter((id) => {
+    const finding = findingById.value.get(id)
+    return !finding || canApplyActionForStatus(finding.action_status, 'ignored')
+  })
+  if (actionableIds.length === 0) {
+    toast.warning('所选 Issue 当前状态不支持忽略')
+    return
+  }
+  ignoreTargetIds.value = actionableIds
+  ignoreReasonCode.value = ''
+  ignoreReasonNote.value = ''
+  ignoreActionNote.value = typeof note === 'string' ? note.trim() : null
+  ignoreDialogVisible.value = true
+}
+
+const confirmIgnoreAction = async () => {
+  const reasonCode = ignoreReasonCode.value
+  if (!reasonCode) {
+    toast.warning('请选择忽略原因')
+    return
+  }
+  const reasonNote = ignoreReasonNote.value.trim()
+  if (isIgnoreReasonNoteRequired.value && !reasonNote) {
+    toast.warning('当前忽略原因必须填写备注')
+    return
+  }
+
+  ignoreSubmitting.value = true
+  batchLoading.value = true
+  const targetIds = [...ignoreTargetIds.value]
+  if (targetIds.length === 1) {
+    rowActionLoadingId.value = targetIds[0]
+  }
+  try {
+    const ok = await doBatchAction(
+      'ignored',
+      targetIds,
+      {
+        ignoreReasonCode: reasonCode,
+        ignoreReasonNote: reasonNote,
+        note: ignoreActionNote.value ?? undefined,
+      },
+    )
+    if (!ok) return
+    if (ignoreActionNote.value == null) {
+      actionNote.value = ''
+    } else {
+      detailActionNote.value = ''
+    }
+    if (!detailDialogVisible.value) {
+      clearSelection()
+    }
+    closeIgnoreDialog()
+    await fetchFindings()
+    if (detailDialogVisible.value && targetIds.length === 1) {
+      syncDetailStateAfterAction(targetIds[0])
+    }
+  } finally {
+    ignoreSubmitting.value = false
+    batchLoading.value = false
+    rowActionLoadingId.value = null
+  }
 }
 
 const formatLineRange = (lineStart: number | null, lineEnd: number | null): string => {
@@ -890,7 +1318,7 @@ const severityLabel = (severity: string): string => {
 }
 
 const actionStatusLabel = (status: string): string => {
-  const normalized = String(status || '').toLowerCase()
+  const normalized = normalizeActionStatus(status)
   if (normalized === 'unprocessed') return '未处理'
   if (normalized === 'fixed') return '已修复'
   if (normalized === 'todo') return '待处理'
@@ -900,12 +1328,23 @@ const actionStatusLabel = (status: string): string => {
 }
 
 const actionStatusSeverity = (status: string): 'success' | 'warn' | 'info' | 'danger' | 'secondary' => {
-  const normalized = String(status || '').toLowerCase()
+  const normalized = normalizeActionStatus(status)
   if (normalized === 'fixed') return 'success'
   if (normalized === 'todo') return 'warn'
   if (normalized === 'reopened') return 'info'
   if (normalized === 'ignored') return 'danger'
   return 'secondary'
+}
+
+const ignoreReasonLabel = (code: string): string => {
+  const normalized = String(code || '').toLowerCase()
+  if (normalized === 'business_exception') return '业务特例'
+  if (normalized === 'historical_debt') return '历史债务'
+  if (normalized === 'rule_false_positive') return '规则误报'
+  if (normalized === 'defer_fix') return '暂缓修复'
+  if (normalized === 'duplicate') return '重复问题'
+  if (normalized === 'other') return '其他'
+  return code || '未标注'
 }
 
 const reviewStatusLabel = (status: string): string => getReviewStatusMeta(status).label

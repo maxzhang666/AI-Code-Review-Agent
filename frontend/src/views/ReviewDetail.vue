@@ -280,12 +280,6 @@
                 v-if="structuredFindings.length > 0"
                 class="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-surface-200/70 bg-surface-50 p-3 dark:border-surface-700/70 dark:bg-surface-900"
               >
-                <span class="text-xs text-surface-500">处理记录人</span>
-                <InputText
-                  v-model.trim="actionActor"
-                  class="h-8 w-[180px]"
-                  placeholder="例如: maxzhang"
-                />
                 <span class="text-xs text-surface-500">点击问题下方按钮写入处理动作</span>
               </div>
 
@@ -304,7 +298,17 @@
                       </Tag>
                     </summary>
                     <div class="space-y-4 p-3">
-                      <div v-for="(issue, idx) in group.issues" :key="idx" class="border-l-2 py-2 pl-3" :class="issueBorderClass(issue.severity)">
+                      <div
+                        v-for="(issue, idx) in group.issues"
+                        :key="idx"
+                        class="border-l-2 py-2 pl-3 transition-all duration-300"
+                        :class="[
+                          issueBorderClass(issue.severity),
+                          isFindingRecentlyUpdated(issue.id)
+                            ? 'rounded-md bg-primary-50/60 ring-1 ring-primary-300/70 dark:bg-primary-900/20 dark:ring-primary-500/40'
+                            : '',
+                        ]"
+                      >
                         <div class="mb-1 flex items-center gap-2">
                           <Tag :severity="severityTag(issue.severity)">{{ severityLabel(issue.severity) }}</Tag>
                           <Tag severity="secondary">{{ issue.category || '质量' }}</Tag>
@@ -331,16 +335,18 @@
                             placeholder="处理备注（可选）"
                             @update:model-value="setActionNote(issue.id, String($event || ''))"
                           />
+                          <div class="flex items-center gap-2">
+                            <span class="text-xs text-surface-500">当前状态</span>
+                            <Tag :severity="actionStatusSeverityByFindingId(issue.id)">
+                              {{ actionStatusLabelByFindingId(issue.id) }}
+                            </Tag>
+                            <span v-if="lastActionMessage(issue.id)" class="text-xs text-surface-500">
+                              {{ lastActionMessage(issue.id) }}
+                            </span>
+                          </div>
                           <div class="flex flex-wrap items-center gap-2">
                             <Button
-                              size="small"
-                              severity="success"
-                              outlined
-                              :loading="isActionLoading(issue.id)"
-                              label="已修复"
-                              @click="submitFindingAction(issue.id, 'fixed')"
-                            />
-                            <Button
+                              v-if="canShowAction(issue.id, 'todo')"
                               size="small"
                               severity="warn"
                               outlined
@@ -349,24 +355,32 @@
                               @click="submitFindingAction(issue.id, 'todo')"
                             />
                             <Button
+                              v-if="canShowAction(issue.id, 'fixed')"
+                              size="small"
+                              severity="success"
+                              outlined
+                              :loading="isActionLoading(issue.id)"
+                              label="已修复"
+                              @click="submitFindingAction(issue.id, 'fixed')"
+                            />
+                            <Button
+                              v-if="canShowAction(issue.id, 'ignored')"
                               size="small"
                               severity="secondary"
                               outlined
                               :loading="isActionLoading(issue.id)"
                               label="忽略"
-                              @click="submitFindingAction(issue.id, 'ignored')"
+                              @click="openIgnoreDialog(issue.id)"
                             />
                             <Button
+                              v-if="canShowAction(issue.id, 'reopened')"
                               size="small"
                               severity="danger"
                               outlined
                               :loading="isActionLoading(issue.id)"
                               label="重新打开"
-                              @click="submitFindingAction(issue.id, 'reopened')"
+                              @click="confirmReopenAction(issue.id)"
                             />
-                            <span v-if="lastActionMessage(issue.id)" class="text-xs text-surface-500">
-                              {{ lastActionMessage(issue.id) }}
-                            </span>
                           </div>
                         </div>
                       </div>
@@ -391,11 +405,57 @@
         </TabPanel>
       </TabPanels>
     </Tabs>
+
+    <Dialog
+      v-model:visible="ignoreDialogVisible"
+      modal
+      :draggable="false"
+      header="忽略原因"
+      :style="{ width: '32rem', maxWidth: '95vw' }"
+    >
+      <div class="space-y-3">
+        <div class="text-xs text-surface-500">
+          当前操作将仅作用于该条问题，忽略原因必填。
+        </div>
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-medium text-surface-600">忽略原因</span>
+          <Select
+            v-model="ignoreDialogReasonCode"
+            :options="ignoreReasonOptions"
+            option-label="label"
+            option-value="value"
+            placeholder="请选择忽略原因"
+            class="w-full"
+          />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-medium text-surface-600">
+            备注
+            <span v-if="isIgnoreDialogReasonNoteRequired" class="text-red-500">*</span>
+          </span>
+          <InputText
+            v-model="ignoreDialogReasonNote"
+            class="w-full"
+            :placeholder="isIgnoreDialogReasonNoteRequired ? '该原因必须填写备注' : '可选备注'"
+            maxlength="500"
+          />
+        </label>
+        <div class="flex justify-end gap-2">
+          <Button text label="取消" @click="closeIgnoreDialog" />
+          <Button
+            severity="secondary"
+            label="确认忽略"
+            :loading="ignoreSubmitting"
+            @click="confirmIgnoreAction"
+          />
+        </div>
+      </div>
+    </Dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   ArrowLeft,
@@ -417,11 +477,16 @@ import {
   AlertTriangle,
 } from 'lucide-vue-next'
 import { marked } from 'marked'
-import { createReviewFindingAction, getProjectDetail, getReviewDetail, getReviewFindings } from '@/api/index'
+import {
+  createReviewFindingAction,
+  getProjectDetail,
+  getReviewDetail,
+  getReviewFindingActions,
+  getReviewFindings,
+} from '@/api/index'
 import { formatBackendDateTime } from '@/utils/datetime'
 import { getReviewStatusMeta } from '@/utils/reviewStatus'
 import { toast } from '@/utils/toast'
-import { useAuthStore } from '@/stores/auth'
 import IconButton from '@/components/ui/IconButton.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -432,6 +497,8 @@ import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
+import Dialog from 'primevue/dialog'
 
 interface ReviewIssue {
   id: number | null
@@ -467,19 +534,26 @@ interface StructuredFinding {
 }
 
 type FindingActionType = 'fixed' | 'ignored' | 'todo' | 'reopened'
+type FindingActionStatus = FindingActionType | 'unprocessed'
+type IgnoreReasonCode = 'business_exception' | 'historical_debt' | 'rule_false_positive' | 'defer_fix' | 'duplicate' | 'other'
 
 const router = useRouter()
 const route = useRoute()
-const auth = useAuthStore()
-auth.hydrate()
 const activeTab = ref('basic')
 const loading = ref(false)
 const mrUrl = ref('')
 const structuredFindings = ref<StructuredFinding[]>([])
-const actionActor = ref(auth.username || '')
+const ignoreDialogVisible = ref(false)
+const ignoreDialogFindingId = ref<number | null>(null)
+const ignoreDialogReasonCode = ref<IgnoreReasonCode | ''>('')
+const ignoreDialogReasonNote = ref('')
+const ignoreSubmitting = ref(false)
 const actionNotes = ref<Record<number, string>>({})
 const actionLoadingMap = ref<Record<number, boolean>>({})
 const actionMessageMap = ref<Record<number, string>>({})
+const actionStatusMap = ref<Record<number, string>>({})
+const recentlyUpdatedFindingId = ref<number | null>(null)
+let recentlyUpdatedTimer: ReturnType<typeof setTimeout> | null = null
 
 const tabs = [
   { key: 'basic', label: '基本信息' },
@@ -584,6 +658,11 @@ interface FileIssueGroup {
   maxSeverity: string
 }
 
+interface IgnoreReasonOption {
+  label: string
+  value: IgnoreReasonCode
+}
+
 const allFilePaths = computed<string[]>(() => {
   const fromReview = Array.isArray(review.value.files_reviewed) ? review.value.files_reviewed as string[] : []
   const fromIssues = issuesList.value.map(i => i.file).filter(Boolean)
@@ -602,6 +681,18 @@ const issuesByFile = computed(() => {
 })
 
 const severityRank = (s: string) => (s === 'critical' ? 4 : s === 'high' ? 3 : s === 'medium' ? 2 : 1)
+
+const ignoreReasonOptions: IgnoreReasonOption[] = [
+  { label: '业务特例', value: 'business_exception' },
+  { label: '历史债务', value: 'historical_debt' },
+  { label: '规则误报', value: 'rule_false_positive' },
+  { label: '暂缓修复', value: 'defer_fix' },
+  { label: '重复问题', value: 'duplicate' },
+  { label: '其他', value: 'other' },
+]
+const isIgnoreDialogReasonNoteRequired = computed(
+  () => ignoreDialogReasonCode.value === 'defer_fix' || ignoreDialogReasonCode.value === 'other'
+)
 
 const filesWithIssues = computed<FileIssueGroup[]>(() => {
   const groups: FileIssueGroup[] = []
@@ -676,10 +767,14 @@ const fetchReview = async () => {
 const fetchReviewFindings = async (id: string) => {
   try {
     const response = await getReviewFindings(id)
-    structuredFindings.value = Array.isArray(response?.results) ? response.results : []
+    const findings = Array.isArray(response?.results) ? response.results : []
+    structuredFindings.value = findings
+    await hydrateFindingActionState(findings)
   } catch (error) {
     console.error('获取结构化问题失败:', error)
     structuredFindings.value = []
+    actionStatusMap.value = {}
+    actionMessageMap.value = {}
   }
 }
 
@@ -711,35 +806,217 @@ const actionTypeLabel = (actionType: FindingActionType): string => {
   return actionType
 }
 
-const submitFindingAction = async (findingId: number | null, actionType: FindingActionType) => {
+const actionStatusLabel = (status: FindingActionStatus): string => {
+  if (status === 'unprocessed') return '未处理'
+  return actionTypeLabel(status)
+}
+
+const actionStatusSeverity = (status: FindingActionStatus): 'success' | 'warn' | 'danger' | 'info' | 'secondary' => {
+  if (status === 'fixed') return 'success'
+  if (status === 'todo') return 'warn'
+  if (status === 'ignored') return 'danger'
+  if (status === 'reopened') return 'info'
+  return 'secondary'
+}
+
+const normalizeActionStatus = (value: unknown): FindingActionStatus => {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'fixed' || normalized === 'ignored' || normalized === 'todo' || normalized === 'reopened') {
+    return normalized
+  }
+  return 'unprocessed'
+}
+
+const actionStatusByFindingId = (findingId: number | null): FindingActionStatus => {
+  if (findingId == null) return 'unprocessed'
+  return normalizeActionStatus(actionStatusMap.value[findingId])
+}
+
+const actionStatusLabelByFindingId = (findingId: number | null): string =>
+  actionStatusLabel(actionStatusByFindingId(findingId))
+
+const actionStatusSeverityByFindingId = (findingId: number | null): 'success' | 'warn' | 'danger' | 'info' | 'secondary' =>
+  actionStatusSeverity(actionStatusByFindingId(findingId))
+
+const canShowAction = (findingId: number | null, actionType: FindingActionType): boolean => {
+  const status = actionStatusByFindingId(findingId)
+  if (actionType === 'reopened') return status !== 'unprocessed' && status !== 'reopened'
+  if (actionType === 'ignored') return status !== 'ignored'
+  if (actionType === 'fixed') return status !== 'fixed'
+  if (actionType === 'todo') return status !== 'todo'
+  return true
+}
+
+const isFindingRecentlyUpdated = (findingId: number | null): boolean =>
+  findingId != null && recentlyUpdatedFindingId.value === findingId
+
+const markFindingUpdated = (findingId: number | null) => {
   if (findingId == null) return
-  const actor = actionActor.value.trim()
-  if (!actor) {
-    toast.warning('请先填写处理记录人')
+  recentlyUpdatedFindingId.value = findingId
+  if (recentlyUpdatedTimer) {
+    clearTimeout(recentlyUpdatedTimer)
+  }
+  recentlyUpdatedTimer = setTimeout(() => {
+    recentlyUpdatedFindingId.value = null
+    recentlyUpdatedTimer = null
+  }, 2000)
+}
+
+const hydrateFindingActionState = async (findings: StructuredFinding[]) => {
+  if (!findings.length) {
+    actionStatusMap.value = {}
+    actionMessageMap.value = {}
     return
+  }
+
+  const statusMap: Record<number, string> = {}
+  const messageMap: Record<number, string> = {}
+  await Promise.all(
+    findings.map(async (item) => {
+      try {
+        const response = await getReviewFindingActions(item.id)
+        const latest = Array.isArray(response?.results) ? response.results[0] : null
+        if (!latest) {
+          statusMap[item.id] = 'unprocessed'
+          return
+        }
+        const status = normalizeActionStatus(latest.action_type)
+        statusMap[item.id] = status
+        const actor = String(latest.actor || '').trim()
+        if (status !== 'unprocessed') {
+          messageMap[item.id] = actor ? `${actionStatusLabel(status)} · ${actor}` : actionStatusLabel(status)
+        }
+      } catch {
+        statusMap[item.id] = 'unprocessed'
+      }
+    })
+  )
+  actionStatusMap.value = statusMap
+  actionMessageMap.value = messageMap
+}
+
+const submitFindingAction = async (
+  findingId: number | null,
+  actionType: FindingActionType,
+  options?: {
+    ignoreReasonCode?: IgnoreReasonCode
+    ignoreReasonNote?: string
+  },
+): Promise<boolean> => {
+  if (findingId == null) return false
+
+  const actionNote = actionType === 'ignored'
+    ? String(options?.ignoreReasonNote ?? getActionNote(findingId)).trim()
+    : getActionNote(findingId).trim()
+  let reasonCode: IgnoreReasonCode | '' = ''
+  if (actionType === 'ignored') {
+    reasonCode = options?.ignoreReasonCode || ''
+    if (!reasonCode) {
+      toast.warning('请选择忽略原因')
+      return false
+    }
+    if ((reasonCode === 'defer_fix' || reasonCode === 'other') && !actionNote) {
+      toast.warning('当前忽略原因必须填写处理备注')
+      return false
+    }
   }
 
   actionLoadingMap.value[findingId] = true
   try {
-    const payload = {
+    const payload: {
+      action_type: FindingActionType
+      note: string
+      ignore_reason_code?: IgnoreReasonCode
+      ignore_reason_note?: string
+    } = {
       action_type: actionType,
-      actor,
-      note: getActionNote(findingId),
+      note: actionNote,
+    }
+    if (actionType === 'ignored' && reasonCode) {
+      payload.ignore_reason_code = reasonCode
+      payload.ignore_reason_note = actionNote
     }
     const resp = await createReviewFindingAction(findingId, payload)
-    actionMessageMap.value[findingId] = `${actionTypeLabel(actionType)} · ${resp?.actor || actor}`
+    actionStatusMap.value[findingId] = actionType
+    const actor = String(resp?.actor || '').trim()
+    actionMessageMap.value[findingId] = actor
+      ? `${actionStatusLabel(actionType)} · ${actor}`
+      : actionStatusLabel(actionType)
+    markFindingUpdated(findingId)
     actionNotes.value[findingId] = ''
     toast.success('处理动作已记录')
+    return true
   } catch (error) {
     console.error('记录处理动作失败:', error)
     toast.error('记录处理动作失败')
+    return false
   } finally {
     actionLoadingMap.value[findingId] = false
   }
 }
 
+const closeIgnoreDialog = () => {
+  ignoreDialogVisible.value = false
+  ignoreDialogFindingId.value = null
+  ignoreDialogReasonCode.value = ''
+  ignoreDialogReasonNote.value = ''
+}
+
+const openIgnoreDialog = (findingId: number | null) => {
+  if (findingId == null) return
+  ignoreDialogFindingId.value = findingId
+  ignoreDialogReasonCode.value = ''
+  ignoreDialogReasonNote.value = ''
+  ignoreDialogVisible.value = true
+}
+
+const confirmIgnoreAction = async () => {
+  const findingId = ignoreDialogFindingId.value
+  if (findingId == null) return
+  const reasonCode = ignoreDialogReasonCode.value
+  if (!reasonCode) {
+    toast.warning('请选择忽略原因')
+    return
+  }
+  const reasonNote = ignoreDialogReasonNote.value.trim()
+  if (isIgnoreDialogReasonNoteRequired.value && !reasonNote) {
+    toast.warning('当前忽略原因必须填写备注')
+    return
+  }
+
+  ignoreSubmitting.value = true
+  try {
+    const ok = await submitFindingAction(
+      findingId,
+      'ignored',
+      {
+        ignoreReasonCode: reasonCode,
+        ignoreReasonNote: reasonNote,
+      },
+    )
+    if (!ok) return
+    closeIgnoreDialog()
+  } finally {
+    ignoreSubmitting.value = false
+  }
+}
+
+const confirmReopenAction = async (findingId: number | null) => {
+  if (findingId == null) return
+  const confirmed = window.confirm('确认将该问题重新打开吗？')
+  if (!confirmed) return
+  await submitFindingAction(findingId, 'reopened')
+}
+
 onMounted(() => {
   fetchReview()
+})
+
+onBeforeUnmount(() => {
+  if (recentlyUpdatedTimer) {
+    clearTimeout(recentlyUpdatedTimer)
+    recentlyUpdatedTimer = null
+  }
 })
 
 const goBack = () => {

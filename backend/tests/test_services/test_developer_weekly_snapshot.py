@@ -74,11 +74,16 @@ async def test_generate_last_week_developer_weekly_summaries_and_read_cache(db_s
 
     generation = await generate_last_week_developer_weekly_summaries(
         db_session,
+        run_id="run-test-001",
         reference_date=date(2026, 3, 30),
         use_llm=False,
     )
+    assert generation["run_id"] == "run-test-001"
     assert generation["week_start"] == "2026-03-23"
     assert generation["generated_count"] == 1
+    assert generation["trace_step_count"] >= 1
+    assert isinstance(generation["trace_steps"], list)
+    assert generation["trace_steps"][-1]["name"] == "finalize"
 
     cards = await get_cached_developer_weekly_cards(
         db_session,

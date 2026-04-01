@@ -74,6 +74,29 @@
           <Button v-else class="w-full" rounded label="开启审查" :disabled="loading" @click="$emit('toggle-review')">
             <template #icon><Power class="w-4 h-4" /></template>
           </Button>
+          <Button
+            v-if="isIgnoreStrategyEnabled(project?.ignore_strategy_enabled)"
+            severity="secondary"
+            outlined
+            class="w-full"
+            rounded
+            label="关闭忽略策略自动生效"
+            :disabled="loading"
+            @click="$emit('toggle-ignore-strategy')"
+          >
+            <template #icon><ShieldOff class="w-4 h-4" /></template>
+          </Button>
+          <Button
+            v-else
+            severity="secondary"
+            class="w-full"
+            rounded
+            label="开启忽略策略自动生效"
+            :disabled="loading"
+            @click="$emit('toggle-ignore-strategy')"
+          >
+            <template #icon><ShieldCheck class="w-4 h-4" /></template>
+          </Button>
           <Button outlined class="w-full" rounded label="查看 GitLab" @click="openUrl(project?.project_url)">
             <template #icon><ExternalLink class="w-4 h-4" /></template>
           </Button>
@@ -89,7 +112,7 @@
 <script setup lang="ts">
 import {
   GitCommit, GitPullRequest, CheckCircle2, AlertCircle,
-  TrendingUp, Power, ExternalLink, Settings
+  TrendingUp, Power, ExternalLink, Settings, ShieldCheck, ShieldOff
 } from 'lucide-vue-next'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -103,10 +126,26 @@ defineProps<{
 
 defineEmits<{
   'toggle-review': []
+  'toggle-ignore-strategy': []
   'refresh': []
 }>()
 
 const openUrl = (url?: string) => {
   if (url) window.open(url, '_blank')
+}
+
+const isIgnoreStrategyEnabled = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (!normalized) return false
+    if (['true', 'yes', 'on', 'enabled', 'enable', 'active', 'open'].includes(normalized)) return true
+    if (['false', 'no', 'off', 'disabled', 'disable', 'inactive', 'close', 'closed'].includes(normalized)) return false
+    const numeric = Number(normalized)
+    if (!Number.isNaN(numeric)) return numeric !== 0
+    return true
+  }
+  return false
 }
 </script>

@@ -92,6 +92,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '配置管理', icon: 'Settings' }
       },
       {
+        path: 'task-queue',
+        name: 'TaskQueue',
+        component: () => import('@/views/TaskQueue.vue'),
+        meta: { title: '任务队列', icon: 'ListChecks' }
+      },
+      {
         path: 'logs',
         name: 'Logs',
         component: () => import('@/views/Logs.vue'),

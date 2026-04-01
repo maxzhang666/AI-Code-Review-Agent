@@ -55,6 +55,23 @@ def _parse_llm_summary_payload(content: str) -> dict[str, Any] | None:
     return None
 
 
+def _append_trace_step(
+    steps: list[dict[str, Any]],
+    name: str,
+    *,
+    status: str = "ok",
+    **data: Any,
+) -> None:
+    entry: dict[str, Any] = {
+        "name": name,
+        "status": status,
+        "at": datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds"),
+    }
+    if data:
+        entry["data"] = data
+    steps.append(entry)
+
+
 async def _generate_llm_summary(
     db: AsyncSession,
     *,
@@ -189,6 +206,7 @@ async def get_cached_developer_weekly_report(
 async def generate_last_week_developer_weekly_summaries(
     db: AsyncSession,
     *,
+    run_id: str | None = None,
     reference_date: date | None = None,
     include_statuses: list[str] | None = None,
     use_llm: bool = True,
@@ -197,6 +215,20 @@ async def generate_last_week_developer_weekly_summaries(
     week_start, week_end = _build_last_week_window(reference_date, settings.TIMEZONE)
     normalized_include_statuses = await _resolve_include_statuses(db, include_statuses=include_statuses)
     statuses_key = _build_statuses_key(normalized_include_statuses)
+    trace_steps: list[dict[str, Any]] = []
+    _append_trace_step(
+        trace_steps,
+        "resolve_week_window",
+        run_id=run_id,
+        week_start=week_start.isoformat(),
+        week_end=week_end.isoformat(),
+        reference_date=reference_date.isoformat() if isinstance(reference_date, date) else None,
+    )
+    _append_trace_step(
+        trace_steps,
+        "resolve_include_statuses",
+        include_statuses=normalized_include_statuses,
+    )
 
     cards = await generate_developer_weekly_cards(
         db,
@@ -205,6 +237,7 @@ async def generate_last_week_developer_weekly_summaries(
         include_statuses=normalized_include_statuses,
     )
     rows = list(cards.get("results") or [])
+    _append_trace_step(trace_steps, "load_candidate_cards", candidate_count=len(rows))
 
     await db.execute(
         delete(DeveloperWeeklySummary).where(
@@ -212,6 +245,7 @@ async def generate_last_week_developer_weekly_summaries(
             DeveloperWeeklySummary.include_statuses_key == statuses_key,
         )
     )
+    _append_trace_step(trace_steps, "clear_previous_snapshots")
 
     generated_count = 0
     llm_count = 0
@@ -219,10 +253,19 @@ async def generate_last_week_developer_weekly_summaries(
     failed_count = 0
     now_utc = datetime.now(UTC).replace(tzinfo=None)
 
-    for card in rows:
+    for index, card in enumerate(rows, start=1):
         owner = str(card.get("owner") or "").strip()
         if not owner:
+            _append_trace_step(
+                trace_steps,
+                "skip_candidate",
+                status="warning",
+                candidate_index=index,
+                reason="empty_owner",
+            )
             continue
+
+        _append_trace_step(trace_steps, "generate_owner_report_started", owner=owner, candidate_index=index)
         report = await generate_developer_weekly_report(
             db,
             owner=owner,
@@ -246,8 +289,22 @@ async def generate_last_week_developer_weekly_summaries(
                 if llm_gaps:
                     gap_checklist = llm_gaps
                 source = "llm"
+                _append_trace_step(
+                    trace_steps,
+                    "llm_summary_generated",
+                    owner=owner,
+                    provider=llm_provider,
+                    model=llm_model,
+                )
             elif llm_error:
                 error_message = llm_error
+                _append_trace_step(
+                    trace_steps,
+                    "llm_summary_fallback",
+                    status="warning",
+                    owner=owner,
+                    error=llm_error,
+                )
 
         report_payload = dict(report)
         report_payload["ai_summary"] = ai_summary
@@ -289,9 +346,28 @@ async def generate_last_week_developer_weekly_summaries(
             heuristic_count += 1
         if error_message:
             failed_count += 1
+        _append_trace_step(
+            trace_steps,
+            "owner_snapshot_persisted",
+            owner=owner,
+            source=source,
+            total_findings=int(report.get("summary", {}).get("total_findings") or 0),
+            llm_error=error_message,
+        )
 
     await db.flush()
+    _append_trace_step(
+        trace_steps,
+        "finalize",
+        run_id=run_id,
+        candidate_count=len(rows),
+        generated_count=generated_count,
+        llm_count=llm_count,
+        heuristic_count=heuristic_count,
+        failed_count=failed_count,
+    )
     return {
+        "run_id": run_id,
         "week_start": week_start.isoformat(),
         "week_end": week_end.isoformat(),
         "include_statuses": normalized_include_statuses,
@@ -301,4 +377,6 @@ async def generate_last_week_developer_weekly_summaries(
         "heuristic_count": heuristic_count,
         "failed_count": failed_count,
         "generated_at": now_utc.isoformat(timespec="seconds"),
+        "trace_steps": trace_steps,
+        "trace_step_count": len(trace_steps),
     }

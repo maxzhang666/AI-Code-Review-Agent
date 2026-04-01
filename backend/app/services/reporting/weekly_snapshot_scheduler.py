@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -10,7 +11,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.core.logging import get_logger
 from app.database import get_session_factory
-from app.models import SystemConfig
+from app.models import SystemConfig, WeeklySnapshotSchedulerLog
 from app.queue.types import TaskPayload, TaskPriority
 
 _AUTO_LAST_ENQUEUED_WEEK_START_KEY = "reports.developer_weekly.auto_last_enqueued_week_start"
@@ -20,12 +21,16 @@ _AUTO_TRIGGER_WEEKDAY_KEY = "reports.developer_weekly.auto_trigger_weekday"
 _AUTO_TRIGGER_HOUR_KEY = "reports.developer_weekly.auto_trigger_hour"
 _AUTO_POLL_SECONDS_KEY = "reports.developer_weekly.auto_poll_seconds"
 _AUTO_USE_LLM_KEY = "reports.developer_weekly.auto_use_llm"
+_AUTO_IGNORE_STRATEGY_ENABLED_KEY = "reports.ignore_strategy.auto_enabled"
+_AUTO_IGNORE_STRATEGY_APPLY_KEY = "reports.ignore_strategy.auto_apply"
 
 _DEFAULT_AUTO_ENABLED = False
 _DEFAULT_TRIGGER_WEEKDAY = 0
 _DEFAULT_TRIGGER_HOUR = 1
 _DEFAULT_POLL_SECONDS = 300
 _DEFAULT_USE_LLM = True
+_DEFAULT_IGNORE_STRATEGY_ENABLED = False
+_DEFAULT_IGNORE_STRATEGY_APPLY = True
 
 
 def _resolve_target_week_start_to_generate(
@@ -61,6 +66,16 @@ def _parse_int(value: Any, *, default: int, min_value: int, max_value: int) -> i
     if parsed < min_value or parsed > max_value:
         return default
     return parsed
+
+
+def _parse_optional_date(value: Any) -> date | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 class DeveloperWeeklySnapshotScheduler:
@@ -103,6 +118,8 @@ class DeveloperWeeklySnapshotScheduler:
                             _AUTO_TRIGGER_HOUR_KEY,
                             _AUTO_POLL_SECONDS_KEY,
                             _AUTO_USE_LLM_KEY,
+                            _AUTO_IGNORE_STRATEGY_ENABLED_KEY,
+                            _AUTO_IGNORE_STRATEGY_APPLY_KEY,
                         ]
                     )
                 )
@@ -130,7 +147,62 @@ class DeveloperWeeklySnapshotScheduler:
                 max_value=3600,
             ),
             "use_llm": _parse_bool(raw_map.get(_AUTO_USE_LLM_KEY), default=_DEFAULT_USE_LLM),
+            "ignore_strategy_enabled": _parse_bool(
+                raw_map.get(_AUTO_IGNORE_STRATEGY_ENABLED_KEY),
+                default=_DEFAULT_IGNORE_STRATEGY_ENABLED,
+            ),
+            "ignore_strategy_apply": _parse_bool(
+                raw_map.get(_AUTO_IGNORE_STRATEGY_APPLY_KEY),
+                default=_DEFAULT_IGNORE_STRATEGY_APPLY,
+            ),
         }
+
+    async def _record_scheduler_log(self, db, *, runtime: dict[str, Any], result: dict[str, Any]) -> None:  # noqa: ANN001
+        try:
+            status = str(result.get("status") or "").strip() or "error"
+            reason = str(result.get("reason") or "").strip() or None
+            details = dict(result)
+            poll_seconds: int | None = None
+            poll_seconds_raw = result.get("poll_seconds")
+            if poll_seconds_raw is not None and str(poll_seconds_raw).strip():
+                try:
+                    poll_seconds = int(str(poll_seconds_raw).strip())
+                except ValueError:
+                    poll_seconds = None
+            db.add(
+                WeeklySnapshotSchedulerLog(
+                    status=status,
+                    reason=reason,
+                    run_id=str(result.get("run_id") or "").strip() or None,
+                    task_id=str(result.get("task_id") or "").strip() or None,
+                    ignore_strategy_task_id=str(result.get("ignore_strategy_task_id") or "").strip() or None,
+                    week_start=_parse_optional_date(result.get("week_start")),
+                    reference_date=_parse_optional_date(result.get("reference_date")),
+                    poll_seconds=poll_seconds,
+                    trigger_weekday=int(runtime.get("trigger_weekday")) if runtime.get("trigger_weekday") is not None else None,
+                    trigger_hour=int(runtime.get("trigger_hour")) if runtime.get("trigger_hour") is not None else None,
+                    use_llm=bool(runtime.get("use_llm")) if runtime.get("use_llm") is not None else None,
+                    ignore_strategy_enabled=(
+                        bool(runtime.get("ignore_strategy_enabled"))
+                        if runtime.get("ignore_strategy_enabled") is not None
+                        else None
+                    ),
+                    ignore_strategy_apply=(
+                        bool(runtime.get("ignore_strategy_apply"))
+                        if runtime.get("ignore_strategy_apply") is not None
+                        else None
+                    ),
+                    details=details,
+                )
+            )
+            await db.flush()
+        except Exception as exc:
+            self._logger.log_error_with_context(
+                "developer_weekly_snapshot_scheduler_log_persist_failed",
+                error=exc,
+                status=result.get("status"),
+                reason=result.get("reason"),
+            )
 
     async def _loop(self) -> None:
         while self._running:
@@ -154,7 +226,10 @@ class DeveloperWeeklySnapshotScheduler:
             poll_seconds = int(runtime["poll_seconds"])
 
             if not bool(runtime["enabled"]):
-                return {"status": "skipped", "reason": "disabled", "poll_seconds": poll_seconds}
+                result = {"status": "skipped", "reason": "disabled", "poll_seconds": poll_seconds}
+                await self._record_scheduler_log(db, runtime=runtime, result=result)
+                await db.commit()
+                return result
 
             target_week_start = _resolve_target_week_start_to_generate(
                 now_local,
@@ -162,7 +237,10 @@ class DeveloperWeeklySnapshotScheduler:
                 trigger_hour=int(runtime["trigger_hour"]),
             )
             if target_week_start is None:
-                return {"status": "skipped", "reason": "not_trigger_time", "poll_seconds": poll_seconds}
+                result = {"status": "skipped", "reason": "not_trigger_time", "poll_seconds": poll_seconds}
+                await self._record_scheduler_log(db, runtime=runtime, result=result)
+                await db.commit()
+                return result
 
             target_week_start_text = target_week_start.isoformat()
             current_marker = (
@@ -171,17 +249,22 @@ class DeveloperWeeklySnapshotScheduler:
                 )
             ).scalars().first()
             if current_marker is not None and str(current_marker.value or "").strip() == target_week_start_text:
-                return {
+                result = {
                     "status": "skipped",
                     "reason": "already_enqueued",
                     "week_start": target_week_start_text,
                     "poll_seconds": poll_seconds,
                 }
+                await self._record_scheduler_log(db, runtime=runtime, result=result)
+                await db.commit()
+                return result
 
+            run_id = str(uuid4())
             task_id = await self._queue_manager.enqueue(
                 TaskPayload(
                     task_type="generate_developer_weekly_snapshot",
                     data={
+                        "run_id": run_id,
                         "reference_date": now_local.date().isoformat(),
                         "use_llm": bool(runtime["use_llm"]),
                     },
@@ -189,6 +272,20 @@ class DeveloperWeeklySnapshotScheduler:
                     max_retries=1,
                 )
             )
+            queued_ignore_task_id: str | None = None
+            if bool(runtime["ignore_strategy_enabled"]):
+                queued_ignore_task_id = await self._queue_manager.enqueue(
+                    TaskPayload(
+                        task_type="generate_ignore_strategy_weekly",
+                        data={
+                            "run_id": run_id,
+                            "reference_date": now_local.date().isoformat(),
+                            "apply_changes": bool(runtime["ignore_strategy_apply"]),
+                        },
+                        priority=TaskPriority.low,
+                        max_retries=1,
+                    )
+                )
 
             if current_marker is None:
                 current_marker = SystemConfig(
@@ -199,17 +296,24 @@ class DeveloperWeeklySnapshotScheduler:
                 db.add(current_marker)
             else:
                 current_marker.value = target_week_start_text
-            await db.commit()
 
             self._logger.info(
                 "developer_weekly_snapshot_auto_enqueued",
                 task_id=task_id,
+                ignore_task_id=queued_ignore_task_id,
+                run_id=run_id,
                 week_start=target_week_start_text,
             )
-            return {
+            response = {
                 "status": "queued",
                 "task_id": task_id,
+                "run_id": run_id,
                 "week_start": target_week_start_text,
                 "reference_date": now_local.date().isoformat(),
                 "poll_seconds": poll_seconds,
             }
+            if queued_ignore_task_id is not None:
+                response["ignore_strategy_task_id"] = queued_ignore_task_id
+            await self._record_scheduler_log(db, runtime=runtime, result=response)
+            await db.commit()
+            return response

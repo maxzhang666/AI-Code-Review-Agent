@@ -89,6 +89,7 @@ import {
   BarChart3,
   CalendarRange,
   ListTodo,
+  ListChecks,
 } from 'lucide-vue-next'
 import reviewLogo from '@/assets/icons/review-logo.webp'
 import Card from 'primevue/card'
@@ -132,6 +133,7 @@ const groupedNavItems: SidebarMenuGroup[] = [
     label: '系统',
     items: [
       { route: '/config', label: '配置管理', iconComponent: Settings },
+      { route: '/task-queue', label: '任务队列', iconComponent: ListChecks },
       { route: '/logs', label: '日志监控', iconComponent: ScrollText },
       { route: '/system-logs', label: '系统日志', iconComponent: FileSearch },
     ],

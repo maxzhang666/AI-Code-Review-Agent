@@ -58,7 +58,13 @@ export const getReviewFindingsList = (params?: any) => {
 
 export const createReviewFindingAction = (
   id: string | number,
-  data: { action_type: 'fixed' | 'ignored' | 'todo' | 'reopened'; actor: string; note?: string }
+  data: {
+    action_type: 'fixed' | 'ignored' | 'todo' | 'reopened'
+    actor?: string
+    note?: string
+    ignore_reason_code?: 'business_exception' | 'historical_debt' | 'rule_false_positive' | 'defer_fix' | 'duplicate' | 'other'
+    ignore_reason_note?: string
+  }
 ) => {
   return request({
     url: getApiUrl(API_ENDPOINTS.REVIEW_FINDING_ACTIONS(id)),
@@ -70,13 +76,22 @@ export const createReviewFindingAction = (
 export const createReviewFindingActionsBatch = (data: {
   finding_ids: number[]
   action_type: 'fixed' | 'ignored' | 'todo' | 'reopened'
-  actor: string
+  actor?: string
   note?: string
+  ignore_reason_code?: 'business_exception' | 'historical_debt' | 'rule_false_positive' | 'defer_fix' | 'duplicate' | 'other'
+  ignore_reason_note?: string
 }) => {
   return request({
     url: getApiUrl(API_ENDPOINTS.REVIEW_FINDING_ACTIONS_BATCH),
     method: 'post',
     data
+  })
+}
+
+export const getReviewFindingActions = (id: string | number) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.REVIEW_FINDING_ACTIONS(id)),
+    method: 'get'
   })
 }
 
@@ -125,6 +140,41 @@ export const getDeveloperWeeklyCards = (params?: {
     url: getApiUrl(API_ENDPOINTS.DEVELOPER_WEEKLY_CARDS),
     method: 'get',
     params
+  })
+}
+
+export const getProjectIgnoreStrategies = (params: {
+  project_id: number | string
+  statuses?: string[]
+}) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.IGNORE_STRATEGIES),
+    method: 'get',
+    params
+  })
+}
+
+export const disableProjectIgnoreStrategy = (
+  strategyId: number | string,
+  data?: {
+    reason?: string
+  }
+) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.IGNORE_STRATEGY_DISABLE(strategyId)),
+    method: 'patch',
+    data
+  })
+}
+
+export const disableAllProjectIgnoreStrategies = (data: {
+  project_id: number | string
+  reason?: string
+}) => {
+  return request({
+    url: getApiUrl(API_ENDPOINTS.IGNORE_STRATEGIES_DISABLE_ALL),
+    method: 'post',
+    data
   })
 }
 
@@ -280,6 +330,165 @@ export const getSystemInfo = () => {
   return request({
     url: getApiUrl(API_ENDPOINTS.SYSTEM_INFO),
     method: 'get'
+  })
+}
+
+export type SystemTaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'retrying' | string
+
+export interface SystemTaskSummaryResponse {
+  queue_backend?: string
+  is_persistent?: boolean
+  observability_persistent?: boolean | null
+  by_status?: Record<string, number>
+  by_task_type?: Record<string, number>
+}
+
+export interface SystemTaskObservationItem {
+  task_id: string
+  run_id?: string | null
+  task_type?: string
+  status?: SystemTaskStatus
+  priority?: string
+  retry_count?: number
+  max_retries?: number
+  payload?: Record<string, any> | null
+  result?: Record<string, any> | null
+  error_message?: string | null
+  created_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  updated_at?: string | null
+  duration_ms?: number | null
+}
+
+export interface SystemTaskListParams {
+  page?: number
+  limit?: number
+  status?: string
+  task_type?: string
+  task_id?: string
+  run_id?: string
+  created_from?: string
+  created_to?: string
+}
+
+export interface SystemTaskListResponse {
+  count: number
+  results: SystemTaskObservationItem[]
+}
+
+export interface SystemTaskEventItem {
+  id?: number
+  task_id?: string
+  run_id?: string | null
+  event_type?: string
+  status_after?: SystemTaskStatus
+  attempt_no?: number
+  message?: string | null
+  event_payload?: Record<string, any> | null
+  created_at?: string | null
+}
+
+export interface SystemTaskDetailResponse extends SystemTaskObservationItem {
+  events?: SystemTaskEventItem[]
+}
+
+export interface WeeklySchedulerLogItem {
+  id: number
+  status: 'queued' | 'skipped' | 'error' | string
+  reason?: string | null
+  run_id?: string | null
+  task_id?: string | null
+  ignore_strategy_task_id?: string | null
+  week_start?: string | null
+  reference_date?: string | null
+  poll_seconds?: number | null
+  trigger_weekday?: number | null
+  trigger_hour?: number | null
+  use_llm?: boolean | null
+  ignore_strategy_enabled?: boolean | null
+  ignore_strategy_apply?: boolean | null
+  details?: Record<string, any> | null
+  created_at?: string | null
+}
+
+export interface WeeklySchedulerLogListResponse {
+  count: number
+  results: WeeklySchedulerLogItem[]
+}
+
+export interface MaintenanceCleanupResponse {
+  resource: string
+  retention_days: number
+  dry_run: boolean
+  cutoff: string
+  stale_count: number
+  deleted_count: number
+}
+
+export const getSystemTaskSummary = () => {
+  return request<SystemTaskSummaryResponse>({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_TASKS_SUMMARY),
+    method: 'get'
+  })
+}
+
+export const getSystemTasks = (params?: SystemTaskListParams) => {
+  return request<SystemTaskListResponse>({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_TASKS),
+    method: 'get',
+    params
+  })
+}
+
+export const getSystemTaskDetail = (taskId: string) => {
+  return request<SystemTaskDetailResponse>({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_TASK_DETAIL(taskId)),
+    method: 'get'
+  })
+}
+
+export const getSystemTaskEvents = (taskId: string, params?: { limit?: number }) => {
+  return request<SystemTaskEventItem[]>({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_TASK_EVENTS(taskId)),
+    method: 'get',
+    params
+  })
+}
+
+export const getWeeklySchedulerLogs = (params?: {
+  page?: number
+  limit?: number
+  status?: string
+  reason?: string
+  run_id?: string
+}) => {
+  return request<WeeklySchedulerLogListResponse>({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_WEEKLY_SCHEDULER_LOGS),
+    method: 'get',
+    params
+  })
+}
+
+export const cleanupTaskEventsMaintenance = (data?: {
+  retention_days?: number
+  dry_run?: boolean
+}) => {
+  return request<MaintenanceCleanupResponse>({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_MAINTENANCE_CLEANUP_TASK_EVENTS),
+    method: 'post',
+    data,
+  })
+}
+
+export const cleanupWeeklySchedulerLogsMaintenance = (data?: {
+  retention_days?: number
+  dry_run?: boolean
+}) => {
+  return request<MaintenanceCleanupResponse>({
+    url: getApiUrl(API_ENDPOINTS.SYSTEM_MAINTENANCE_CLEANUP_WEEKLY_SCHEDULER_LOGS),
+    method: 'post',
+    data,
   })
 }
 
@@ -615,7 +824,7 @@ export const triggerDeveloperWeeklyLastWeekSummary = (data?: {
   include_statuses?: string[]
   use_llm?: boolean
 }) => {
-  return request({
+  return request<{ code?: number; message?: string; task_id?: string; run_id?: string }>({
     url: getApiUrl(API_ENDPOINTS.SYSTEM_REPORTS_DEVELOPER_WEEKLY_GENERATE_LAST_WEEK),
     method: 'post',
     data

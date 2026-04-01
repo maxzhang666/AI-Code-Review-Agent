@@ -9,12 +9,23 @@
         ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-500/35 dark:bg-green-500/12 dark:text-green-300'
         : 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/35 dark:bg-red-500/12 dark:text-red-300'"
     >
-      <span>{{ message }}</span>
+      <div class="flex items-center gap-2">
+        <span>{{ message }}</span>
+        <Button
+          v-if="(lastTriggeredTaskId || lastTriggeredRunId) && messageType === 'success'"
+          size="small"
+          text
+          class="!px-2 !py-1 !text-current underline"
+          @click="goToTaskQueue(lastTriggeredTaskId, lastTriggeredRunId)"
+        >
+          查看任务队列
+        </Button>
+      </div>
       <IconButton
         size="small"
         class="!h-6 !w-6 !text-current/70"
         aria-label="关闭提示"
-        @click="message = ''"
+        @click="clearMessage"
       >
         ×
       </IconButton>
@@ -67,6 +78,10 @@
           />
         </TabPanel>
 
+        <TabPanel value="maintenance">
+          <MaintenanceOperationsTab />
+        </TabPanel>
+
         <TabPanel value="webhook-events">
           <WebhookEventRulesTab
             :rules="webhookEventRules"
@@ -90,7 +105,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onBeforeUnmount, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   getConfigSummary,
   batchUpdateConfig,
@@ -110,7 +126,9 @@ import WeeklySnapshotSchedulerConfigTab, {
   type WeeklySnapshotSchedulerForm,
   type WeeklySummaryStatus
 } from '@/components/config/WeeklySnapshotSchedulerConfigTab.vue'
+import MaintenanceOperationsTab from '@/components/config/MaintenanceOperationsTab.vue'
 import IconButton from '@/components/ui/IconButton.vue'
+import Button from 'primevue/button'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
@@ -118,11 +136,13 @@ import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
 
 const activeTab = ref('gitlab')
+const router = useRouter()
 const tabs = [
   { key: 'gitlab', label: 'GitLab 配置' },
   { key: 'llm-providers', label: 'LLM 供应商' },
   { key: 'review-snippet', label: '问题代码' },
   { key: 'weekly-snapshot', label: '周报调度' },
+  { key: 'maintenance', label: '运维' },
   { key: 'webhook-events', label: 'Webhook 事件' },
   { key: 'notification', label: '通知配置' },
   { key: 'auth-users', label: '账号管理' },
@@ -133,6 +153,9 @@ const savingWeeklySnapshotConfig = ref(false)
 const triggeringWeeklySnapshot = ref(false)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
+const lastTriggeredTaskId = ref('')
+const lastTriggeredRunId = ref('')
+let messageTimer: number | null = null
 
 const defaultWeeklySnapshotSchedulerConfig = (): WeeklySnapshotSchedulerForm => ({
   enabled: false,
@@ -140,6 +163,8 @@ const defaultWeeklySnapshotSchedulerConfig = (): WeeklySnapshotSchedulerForm => 
   triggerHour: 1,
   pollSeconds: 300,
   useLlm: true,
+  autoIgnoreStrategyEnabled: false,
+  autoIgnoreStrategyApply: true,
   includeStatuses: ['open', 'reopened'],
 })
 
@@ -212,6 +237,8 @@ const normalizeWeeklySnapshotScheduler = (value: unknown): WeeklySnapshotSchedul
     triggerHour: parseIntConfigValue(raw.triggerHour, 1, 0, 23),
     pollSeconds: parseIntConfigValue(raw.pollSeconds, 300, 5, 3600),
     useLlm: raw.useLlm === undefined ? true : Boolean(raw.useLlm),
+    autoIgnoreStrategyEnabled: raw.autoIgnoreStrategyEnabled === undefined ? false : Boolean(raw.autoIgnoreStrategyEnabled),
+    autoIgnoreStrategyApply: raw.autoIgnoreStrategyApply === undefined ? true : Boolean(raw.autoIgnoreStrategyApply),
     includeStatuses: normalizeWeeklySummaryStatuses(raw.includeStatuses),
   }
 }
@@ -223,10 +250,45 @@ const isWeeklySnapshotConfigDirty = computed(() => {
   return JSON.stringify(current) !== JSON.stringify(baseline)
 })
 
-const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
+const clearMessage = () => {
+  message.value = ''
+  lastTriggeredTaskId.value = ''
+  lastTriggeredRunId.value = ''
+  if (messageTimer !== null) {
+    window.clearTimeout(messageTimer)
+    messageTimer = null
+  }
+}
+
+const showMessage = (
+  text: string,
+  type: 'success' | 'error' = 'success',
+  options?: { taskId?: string; runId?: string; durationMs?: number }
+) => {
   message.value = text
   messageType.value = type
-  setTimeout(() => { message.value = '' }, 3000)
+  lastTriggeredTaskId.value = options?.taskId ? String(options.taskId).trim() : ''
+  lastTriggeredRunId.value = options?.runId ? String(options.runId).trim() : ''
+  if (messageTimer !== null) {
+    window.clearTimeout(messageTimer)
+  }
+  const durationMs = Math.max(2000, options?.durationMs ?? 3000)
+  messageTimer = window.setTimeout(() => {
+    clearMessage()
+  }, durationMs)
+}
+
+const goToTaskQueue = (taskId?: string, runId?: string) => {
+  const normalizedTaskId = String(taskId || '').trim()
+  const normalizedRunId = String(runId || '').trim()
+  const query: Record<string, string> = {}
+  if (normalizedTaskId) query.task_id = normalizedTaskId
+  if (normalizedRunId) query.run_id = normalizedRunId
+  void router.push({
+    path: '/task-queue',
+    query: Object.keys(query).length ? query : undefined,
+  })
+  clearMessage()
 }
 
 const normalizeChannelList = (data: any) => {
@@ -334,6 +396,14 @@ const loadConfig = async () => {
           systemConfigMap.get('reports.developer_weekly.auto_use_llm'),
           true
         ),
+        autoIgnoreStrategyEnabled: parseBooleanConfigValue(
+          systemConfigMap.get('reports.ignore_strategy.auto_enabled'),
+          false
+        ),
+        autoIgnoreStrategyApply: parseBooleanConfigValue(
+          systemConfigMap.get('reports.ignore_strategy.auto_apply'),
+          true
+        ),
         includeStatuses: parseStatusConfigValue(
           systemConfigMap.get('reports.developer_weekly.include_statuses')
         ),
@@ -416,6 +486,8 @@ const handleWeeklySnapshotConfigSave = async () => {
         'reports.developer_weekly.auto_trigger_hour': String(schedulerConfig.triggerHour),
         'reports.developer_weekly.auto_poll_seconds': String(schedulerConfig.pollSeconds),
         'reports.developer_weekly.auto_use_llm': String(schedulerConfig.useLlm),
+        'reports.ignore_strategy.auto_enabled': String(schedulerConfig.autoIgnoreStrategyEnabled),
+        'reports.ignore_strategy.auto_apply': String(schedulerConfig.autoIgnoreStrategyApply),
         'reports.developer_weekly.include_statuses': JSON.stringify(schedulerConfig.includeStatuses),
       },
     })
@@ -445,10 +517,15 @@ const handleGenerateWeeklySnapshotNow = async () => {
     const response = await triggerDeveloperWeeklyLastWeekSummary({
       include_statuses: schedulerConfig.includeStatuses,
       use_llm: schedulerConfig.useLlm,
-    }) as { task_id?: string }
+    })
     const taskId = String(response?.task_id || '').trim()
+    const runId = String(response?.run_id || '').trim()
     if (taskId) {
-      showMessage(`已触发上周周报生成任务：${taskId}`)
+      showMessage(`已触发上周周报生成任务：${taskId}${runId ? `（run: ${runId}）` : ''}`, 'success', {
+        taskId,
+        runId,
+        durationMs: 12000,
+      })
     } else {
       showMessage('已触发上周周报生成任务')
     }
@@ -461,4 +538,5 @@ const handleGenerateWeeklySnapshotNow = async () => {
 }
 
 onMounted(() => loadConfig())
+onBeforeUnmount(() => clearMessage())
 </script>

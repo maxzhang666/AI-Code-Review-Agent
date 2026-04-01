@@ -52,6 +52,108 @@
               />
             </TabPanel>
 
+            <TabPanel value="ignore-strategies">
+              <div class="space-y-4">
+                <div class="flex flex-col gap-3">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <label class="flex flex-col gap-1 text-xs text-surface-500">
+                        <span>状态筛选</span>
+                        <Select
+                          v-model="selectedIgnoreStrategyStatus"
+                          :options="ignoreStrategyStatusOptions"
+                          option-label="label"
+                          option-value="value"
+                          class="w-40"
+                          @change="loadProjectIgnoreStrategies"
+                        />
+                      </label>
+                      <label class="flex flex-col gap-1 text-xs text-surface-500">
+                        <span>禁用原因（可选）</span>
+                        <InputText
+                          v-model="ignoreStrategyDisableReason"
+                          class="w-full sm:w-72"
+                          placeholder="例如：本周策略回收"
+                          maxlength="200"
+                        />
+                      </label>
+                    </div>
+                    <div class="text-xs text-surface-500">
+                      当前共 {{ ignoreStrategies.length }} 条策略
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      outlined
+                      rounded
+                      size="small"
+                      label="刷新策略"
+                      :disabled="ignoreStrategiesLoading"
+                      @click="loadProjectIgnoreStrategies"
+                    />
+                    <Button
+                      severity="danger"
+                      rounded
+                      size="small"
+                      label="全部禁用"
+                      :disabled="ignoreStrategiesLoading || !hasEnabledIgnoreStrategies"
+                      @click="disableAllIgnoreStrategies"
+                    />
+                  </div>
+                </div>
+
+                <div v-if="ignoreStrategiesLoading" class="rounded-xl border border-surface-200 bg-surface-50 p-6 text-center text-sm text-surface-500">
+                  正在加载忽略策略...
+                </div>
+
+                <div v-else-if="!ignoreStrategies.length" class="rounded-xl border border-dashed border-surface-300 bg-surface-50 p-6 text-center text-sm text-surface-500">
+                  当前仓库暂无可管理的忽略策略
+                </div>
+
+                <div v-else class="overflow-x-auto rounded-xl border border-surface-200">
+                  <table class="min-w-full divide-y divide-surface-200 text-xs">
+                    <thead class="bg-surface-50">
+                      <tr>
+                        <th class="px-3 py-2 text-left font-medium text-surface-600">规则范围</th>
+                        <th class="px-3 py-2 text-left font-medium text-surface-600">状态</th>
+                        <th class="px-3 py-2 text-left font-medium text-surface-600">置信度</th>
+                        <th class="px-3 py-2 text-left font-medium text-surface-600">样本/周数</th>
+                        <th class="px-3 py-2 text-left font-medium text-surface-600">过期时间</th>
+                        <th class="px-3 py-2 text-left font-medium text-surface-600">禁用原因</th>
+                        <th class="px-3 py-2 text-right font-medium text-surface-600">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-surface-100 bg-white">
+                      <tr v-for="item in ignoreStrategies" :key="item.id">
+                        <td class="px-3 py-2 align-top">
+                          <div class="font-medium text-surface-900">{{ item.rule_key || '-' }}</div>
+                          <div class="mt-1 text-surface-500">{{ item.path_pattern || '仓库级（无路径限制）' }}</div>
+                        </td>
+                        <td class="px-3 py-2 align-top">
+                          <Tag :severity="ignoreStrategyStatusSeverity(item.status)" :value="ignoreStrategyStatusLabel(item.status)" />
+                        </td>
+                        <td class="px-3 py-2 align-top">{{ Number(item.confidence_score || 0).toFixed(2) }}</td>
+                        <td class="px-3 py-2 align-top">{{ item.sample_count_4w || 0 }} / {{ item.active_weeks_4w || 0 }}</td>
+                        <td class="px-3 py-2 align-top">{{ formatBackendDate(item.expire_at) || '-' }}</td>
+                        <td class="px-3 py-2 align-top max-w-[18rem]">
+                          <span class="line-clamp-2">{{ item.disabled_reason || '-' }}</span>
+                        </td>
+                        <td class="px-3 py-2 align-top text-right">
+                          <Button
+                            text
+                            size="small"
+                            label="禁用"
+                            :disabled="ignoreStrategiesLoading || item.status === 'disabled'"
+                            @click="disableIgnoreStrategy(item)"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </TabPanel>
+
             <TabPanel value="notifications">
               <NotificationTab
                 :project-id="projectId"
@@ -85,6 +187,7 @@
           :contributors="topContributors"
           :loading="loading"
           @toggle-review="toggleReview"
+          @toggle-ignore-strategy="toggleIgnoreStrategy"
           @refresh="refreshData"
         />
       </div>
@@ -93,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from 'lucide-vue-next'
 import {
@@ -103,12 +206,16 @@ import {
   getProjectStatsDetail,
   enableProjectReview,
   disableProjectReview,
+  updateProject,
   getNotificationChannels,
   getProjectNotifications,
   getWebhookEventRules,
   getProjectWebhookEvents,
   getProjectWebhookEventPrompts,
-  getLLMProviders
+  getLLMProviders,
+  getProjectIgnoreStrategies,
+  disableProjectIgnoreStrategy,
+  disableAllProjectIgnoreStrategies,
 } from '@/api'
 import { toast } from '@/utils/toast'
 import { formatBackendDate, parseBackendDate } from '@/utils/datetime'
@@ -120,6 +227,8 @@ import RecentEventsTab from '@/components/project/RecentEventsTab.vue'
 import ProjectSidebar from '@/components/project/ProjectSidebar.vue'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import Select from 'primevue/select'
+import InputText from 'primevue/inputtext'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
@@ -133,6 +242,7 @@ const tabs = [
   { key: 'info', label: '项目信息' },
   { key: 'webhook-events', label: 'Webhook事件' },
   { key: 'event-prompts', label: '审查提示词' },
+  { key: 'ignore-strategies', label: '忽略策略' },
   { key: 'notifications', label: '通知设置' },
   { key: 'events', label: '最近事件' },
 ]
@@ -163,6 +273,17 @@ const eventPrompts = ref<any[]>([])
 
 // LLM Providers
 const llmProviders = ref<any[]>([])
+const ignoreStrategies = ref<any[]>([])
+const ignoreStrategiesLoading = ref(false)
+const selectedIgnoreStrategyStatus = ref('')
+const ignoreStrategyDisableReason = ref('')
+const hasEnabledIgnoreStrategies = computed(() => ignoreStrategies.value.some((item: any) => item.status !== 'disabled'))
+const ignoreStrategyStatusOptions = [
+  { label: '全部状态', value: '' },
+  { label: '生效中', value: 'active' },
+  { label: '已过期', value: 'expired' },
+  { label: '已禁用', value: 'disabled' },
+]
 
 const isReviewEnabled = (value: unknown): boolean => {
   if (typeof value === 'boolean') return value
@@ -189,6 +310,7 @@ const loadProjectDetail = async () => {
       project.value = {
         ...response,
         review_enabled: isReviewEnabled(response.review_enabled),
+        ignore_strategy_enabled: isReviewEnabled(response.ignore_strategy_enabled),
       }
     }
   } catch (error) {
@@ -379,6 +501,27 @@ const loadLLMProviders = async () => {
   }
 }
 
+const loadProjectIgnoreStrategies = async () => {
+  try {
+    ignoreStrategiesLoading.value = true
+    const params: Record<string, any> = {
+      project_id: Number(projectId),
+    }
+    if (selectedIgnoreStrategyStatus.value) {
+      params.statuses = [selectedIgnoreStrategyStatus.value]
+    }
+    const response = await getProjectIgnoreStrategies({
+      ...params,
+    })
+    ignoreStrategies.value = Array.isArray(response?.results) ? response.results : []
+  } catch (error) {
+    console.error('Failed to load project ignore strategies:', error)
+    toast.error('加载忽略策略失败')
+  } finally {
+    ignoreStrategiesLoading.value = false
+  }
+}
+
 // --- Actions ---
 
 const goBack = () => router.push('/projects')
@@ -402,6 +545,62 @@ const toggleReview = async () => {
   }
 }
 
+const toggleIgnoreStrategy = async () => {
+  if (!project.value) return
+  const originalStatus = isReviewEnabled(project.value.ignore_strategy_enabled)
+  project.value.ignore_strategy_enabled = !originalStatus
+  try {
+    await updateProject(project.value.project_id.toString(), {
+      ignore_strategy_enabled: project.value.ignore_strategy_enabled,
+    })
+    if (project.value.ignore_strategy_enabled) {
+      toast.success('已开启忽略策略自动生效')
+    } else {
+      toast.success('已关闭忽略策略自动生效')
+    }
+  } catch (error) {
+    project.value.ignore_strategy_enabled = originalStatus
+    console.error('Failed to toggle ignore strategy:', error)
+    toast.error('忽略策略状态更新失败，请重试')
+  }
+}
+
+const disableIgnoreStrategy = async (strategy: any) => {
+  if (!strategy || strategy.status === 'disabled') return
+  try {
+    ignoreStrategiesLoading.value = true
+    const reason = String(ignoreStrategyDisableReason.value || '').trim()
+    await disableProjectIgnoreStrategy(strategy.id, reason ? { reason } : undefined)
+    toast.success('已禁用策略')
+    await loadProjectIgnoreStrategies()
+  } catch (error) {
+    console.error('Failed to disable ignore strategy:', error)
+    toast.error('禁用策略失败，请重试')
+  } finally {
+    ignoreStrategiesLoading.value = false
+  }
+}
+
+const disableAllIgnoreStrategies = async () => {
+  if (!hasEnabledIgnoreStrategies.value) return
+  try {
+    ignoreStrategiesLoading.value = true
+    const reason = String(ignoreStrategyDisableReason.value || '').trim()
+    const response = await disableAllProjectIgnoreStrategies({
+      project_id: Number(projectId),
+      ...(reason ? { reason } : {}),
+    })
+    const count = Number(response?.disabled_count || 0)
+    toast.success(`已禁用 ${count} 条策略`)
+    await loadProjectIgnoreStrategies()
+  } catch (error) {
+    console.error('Failed to disable all ignore strategies:', error)
+    toast.error('批量禁用失败，请重试')
+  } finally {
+    ignoreStrategiesLoading.value = false
+  }
+}
+
 const handlePageChange = async (page: number) => {
   currentPage.value = page
   await loadRecentEvents(page)
@@ -418,7 +617,8 @@ const refreshData = async () => {
     loadRecentEvents(currentPage.value),
     loadReviewHistory(),
     loadProjectStats(),
-    loadLLMProviders()
+    loadLLMProviders(),
+    loadProjectIgnoreStrategies(),
   ])
   await loadNotificationChannelList()
   await loadProjectNotificationSettings()
@@ -428,6 +628,21 @@ const refreshData = async () => {
 }
 
 // --- Helpers ---
+
+const ignoreStrategyStatusLabel = (status: string): string => {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'active') return '生效中'
+  if (normalized === 'expired') return '已过期'
+  if (normalized === 'disabled') return '已禁用'
+  return normalized || '未知'
+}
+
+const ignoreStrategyStatusSeverity = (status: string): string => {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'active') return 'success'
+  if (normalized === 'expired') return 'warn'
+  return 'secondary'
+}
 
 const EVENT_TYPE_MAP: Record<string, string> = {
   'Merge Request Hook': 'merge_request',

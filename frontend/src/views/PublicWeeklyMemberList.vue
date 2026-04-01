@@ -8,6 +8,7 @@
         v-model="anchorDate"
         type="date"
         class="h-9 rounded-md border border-surface-300 bg-surface-0 px-3 text-sm text-surface-700 outline-none transition-colors focus:border-primary-400 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-100"
+        @change="loadCards"
       >
       <Button label="刷新" size="small" :loading="loading" @click="loadCards" />
     </template>

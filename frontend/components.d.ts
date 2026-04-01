@@ -22,6 +22,7 @@ declare module 'vue' {
     IconButton: typeof import('./src/components/ui/IconButton.vue')['default']
     LineChart: typeof import('./src/components/charts/LineChart.vue')['default']
     LLMProviderTab: typeof import('./src/components/config/LLMProviderTab.vue')['default']
+    MaintenanceOperationsTab: typeof import('./src/components/config/MaintenanceOperationsTab.vue')['default']
     NotificationChannelsTab: typeof import('./src/components/config/NotificationChannelsTab.vue')['default']
     NotificationTab: typeof import('./src/components/project/NotificationTab.vue')['default']
     PieChart: typeof import('./src/components/charts/PieChart.vue')['default']

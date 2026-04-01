@@ -6,6 +6,15 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 REVIEW_FINDING_BATCH_MAX_IDS = 500
+IGNORE_REASON_CODES = (
+    "business_exception",
+    "historical_debt",
+    "rule_false_positive",
+    "defer_fix",
+    "duplicate",
+    "other",
+)
+IGNORE_REASON_CODE_PATTERN = "^(business_exception|historical_debt|rule_false_positive|defer_fix|duplicate|other)$"
 
 
 class MergeRequestReviewResponse(BaseModel):
@@ -69,8 +78,10 @@ class ReviewFindingResponse(BaseModel):
 
 class ReviewFindingActionCreate(BaseModel):
     action_type: str = Field(pattern="^(fixed|ignored|todo|reopened)$")
-    actor: str = Field(min_length=1, max_length=255)
+    actor: str | None = Field(default=None, max_length=255)
     note: str = ""
+    ignore_reason_code: str | None = Field(default=None, pattern=IGNORE_REASON_CODE_PATTERN)
+    ignore_reason_note: str = ""
 
 
 class ReviewFindingActionResponse(BaseModel):
@@ -81,6 +92,11 @@ class ReviewFindingActionResponse(BaseModel):
     action_type: str
     actor: str
     note: str = ""
+    ignore_reason_code: str = ""
+    ignore_reason_note: str = ""
+    actor_user_id: int | None = None
+    actor_username: str = ""
+    source: str = ""
     action_at: datetime | None = None
 
 
@@ -132,14 +148,21 @@ class ReviewFindingWorkbenchListResponse(BaseModel):
 class ReviewFindingBatchActionCreate(BaseModel):
     finding_ids: list[int] = Field(min_length=1, max_length=REVIEW_FINDING_BATCH_MAX_IDS)
     action_type: str = Field(pattern="^(fixed|ignored|todo|reopened)$")
-    actor: str = Field(min_length=1, max_length=255)
+    actor: str | None = Field(default=None, max_length=255)
     note: str = ""
+    ignore_reason_code: str | None = Field(default=None, pattern=IGNORE_REASON_CODE_PATTERN)
+    ignore_reason_note: str = ""
 
 
 class ReviewFindingBatchActionResponse(BaseModel):
     success_count: int
     failed_count: int
     failed_ids: list[int] = Field(default_factory=list)
+
+
+class ReviewFindingActionListResponse(BaseModel):
+    count: int
+    results: list[ReviewFindingActionResponse] = Field(default_factory=list)
 
 
 class ReviewStatsBucket(BaseModel):
